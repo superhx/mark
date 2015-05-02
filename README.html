@@ -1,0 +1,80 @@
+<html><head><link rel="stylesheet" href="https://cdn.lukej.me/github-markdown-css/0.2.0/github-markdown.min.css"><link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.5/styles/default.min.css"><style> .markdown-body {  min-width: 200px;max-width: 790px;margin: 0 auto;padding: 30px;}</style></head><body><article class="markdown-body">
+<h2>
+<p>
+Mark
+</p>
+
+</h2>
+<hr>
+<p>
+<strong>Mark</strong> is a <a href="http://daringfireball.net/projects/markdown/syntax">markdown</a> parser implemented in <a href="http://golang.org/">Go</a>. It&#39;s fast and support extension such as Table,fence code,etc.It is safe for utf-8 input.
+</p>
+<p>
+The parser idea comes from <a href="https://github.com/chjj/marked">chjj/marked</a>. But it isn&#39;t as complete as chjj/marked
+</p>
+<h3>
+<p>
+Installation
+</p>
+
+</h3>
+<hr>
+<p>
+Mark is compatible with go1.4.2 (I don&#39;t know whether compatible with go version under 1.4.2)
+</p>
+<p>
+With go and git installed
+</p>
+<pre><code class="golang">
+go get github.com/russross/blackfriday
+</code></pre>
+<h3>
+<p>
+Usage
+</p>
+
+</h3>
+<hr>
+<p>
+Basic usage, read a bytes ,then parse it to <code>Markdown</code> , render <code>Markdown</code> and output
+</p>
+<pre><code class="golang">
+//new and initiate a Marker
+marker:=NewMarker()
+//input []byte is the markdown input , 
+//marker parse the input and return a Markdown object
+markdown:=marker.Mark(input)
+//writer io.Writer
+//render markdown to html and output to writer
+markdown.WriteToHTML(writer)
+</code></pre>
+<p>
+The <code>Markdown</code> is like a tree (dom tree)
+</p>
+<p>
+If you want to operate the <code>Markdown</code> instead of only simple output it. It is all free for you to modify the Markdown tree as you want. The <strong>markdown.go</strong> contain all <code>struct</code> in Markdown tree. 
+</p>
+<h3>
+<p>
+Markdown Grammar Support
+</p>
+
+</h3>
+<hr>
+<ul>
+<li>
+<p>
+<a href="http://daringfireball.net/projects/markdown/syntax">Basic Markdown</a>
+</p>
+
+</li>
+<li>
+<p>
+<a href="https://help.github.com/articles/github-flavored-markdown/">GitHub Flavored Markdown (gfm)</a>
+</p>
+
+</li>
+<ul>
+
+</article>
+</body><script src="http://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.5/highlight.min.js" ></script> <script>hljs.initHighlightingOnLoad();</script></html>
