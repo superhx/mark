@@ -9,8 +9,16 @@ The parser idea comes from [chjj/marked](https://github.com/chjj/marked). But it
 Mark is compatible with go1.4.2 (I don't know whether compatible with go version under 1.4.2)
 
 With go and git installed
+
+Install pcre
+```
+sudo apt-get install libpcre++-dev // In Ubuntu
+brew install pcre				   // In Mac OS X
+```
+Get markdown parser
+
 ``` golang
-go get github.com/russross/blackfriday
+go get github.com/superhx/markdown
 ```
 ###Usage
 ---
