@@ -8,8 +8,8 @@ import (
 )
 
 func TestMarker(t *testing.T) {
-	input, _ := ioutil.ReadFile("README.md")
-	output, err := os.OpenFile("README.html", os.O_WRONLY|os.O_CREATE, 0644)
+	input, _ := ioutil.ReadFile("markdown_help.md")
+	output, err := os.Create("markdown_help.html")
 	if err != nil {
 		fmt.Println("file open fail")
 	}

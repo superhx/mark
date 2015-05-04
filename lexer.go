@@ -55,6 +55,7 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		if node := mark.block.code.Find(bytes); node != nil {
 			bytes = bytes[len(node):]
 			node = regexp.MustCompile(`^ {4}`).ReplaceAll(node, []byte(""))
+			node := removeEndNewline(node)
 			nodes = append(nodes, Code{Text: html.EscapeString(string(node))})
 			continue
 		}
@@ -105,7 +106,6 @@ func (mark *Marker) parse(bytes []byte) []Node {
 				}
 			}
 			table.Cells = cells
-
 			nodes = append(nodes, table)
 			continue
 		}
@@ -148,7 +148,7 @@ func (mark *Marker) parse(bytes []byte) []Node {
 			if !(bull == "*" || bull == "+" || bull == "-") {
 				ordered = true
 			}
-			list := List{Items: []Node{}, Ordered: ordered}
+			list := List{Items: []Item{}, Ordered: ordered}
 			for matcher := mark.block.item.Matcher(listBytes, pcre.NOTEOL); len(listBytes) > 0 && matcher.Matches(); matcher.Match(listBytes, pcre.NOTEOL) {
 				listBytes = listBytes[len(matcher.Group(0)):]
 				list.Items = append(list.Items, mark.subList(matcher.Group(0)))
@@ -223,7 +223,7 @@ func (mark *Marker) parse(bytes []byte) []Node {
 	return nodes
 }
 
-func (mark *Marker) subList(bytes []byte) Node {
+func (mark *Marker) subList(bytes []byte) Item {
 	matcher := mark.block.li.Matcher(bytes, matcherFlag)
 	node := matcher.Group(0)
 	if len(node) == len(bytes) {
@@ -237,7 +237,7 @@ func (mark *Marker) subList(bytes []byte) Node {
 		ordered = true
 	}
 	bytes = bytes[len(node):]
-	item := Item{&List{Items: []Node{}, Ordered: ordered}, mark.parse(append(matcher.Group(3), '\n'))}
+	item := Item{&List{Items: []Item{}, Ordered: ordered}, mark.parse(append(matcher.Group(3), '\n'))}
 	for ; len(bytes) > 0; matcher.Match(bytes, pcre.NOTEOL) {
 		bytes = bytes[len(matcher.Group(0)):]
 		item.Items = append(item.Items, mark.subList(matcher.Group(0)))
@@ -260,7 +260,7 @@ func (mark *Marker) inlineParse(bytes []byte) Text {
 			bytes = bytes[len(cap[0]):]
 			var text, href string
 			if string(cap[2]) == "@" {
-				if cap[2][6] == ':' {
+				if cap[1][6] == ':' {
 					text = string(cap[1][7:])
 				} else {
 					text = string(cap[1])
@@ -303,12 +303,7 @@ func (mark *Marker) inlineParse(bytes []byte) Text {
 		//strong
 		if matcher := mark.inline.strong.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
-			var text string
-			if matcher.Groups() == 2 {
-				text = matcher.GroupString(2)
-			} else {
-				text = matcher.GroupString(1)
-			}
+			text := matcher.GroupString(1) + matcher.GroupString(2)
 			parts = append(parts, Strong{Text: html.EscapeString(text)})
 			continue
 		}
@@ -316,12 +311,7 @@ func (mark *Marker) inlineParse(bytes []byte) Text {
 		//em
 		if matcher := mark.inline.em.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
-			var text string
-			if matcher.Groups() == 2 {
-				text = matcher.GroupString(2)
-			} else {
-				text = matcher.GroupString(1)
-			}
+			text := matcher.GroupString(1) + matcher.GroupString(2)
 			parts = append(parts, Em{Text: html.EscapeString(text)})
 			continue
 		}
@@ -357,6 +347,16 @@ func (mark *Marker) inlineParse(bytes []byte) Text {
 
 func (mark *Marker) inlineStringParse(str string) Text {
 	return mark.inlineParse([]byte(str))
+}
+
+func removeEndNewline(bytes []byte) []byte {
+	for i := len(bytes) - 1; i >= 0; i-- {
+		if bytes[i] != '\n' {
+			bytes = bytes[:i]
+			return bytes
+		}
+	}
+	return nil
 }
 
 //NewMarker initiate a new *Markdown and return it
@@ -412,7 +412,7 @@ func NewMarker() *Marker {
 	mark := &Marker{
 		block: BlockRex{
 			newline:    regexp.MustCompile(`^\n+`),
-			code:       regexp.MustCompile(`^( {4}[^\n]+\n*)+`),
+			code:       regexp.MustCompile(`^(( {4}| {2}|\t)[^\n]+\n*)+`),
 			fences:     pcre.MustCompile("^ *(`{3,}|~{3,}) *(\\S+)? *\\n([\\s\\S]+?)\\s*\\1 *(?:\\n+|$)", compileFlag),
 			hr:         regexp.MustCompile(hr),
 			heading:    regexp.MustCompile(heading),

@@ -26,7 +26,7 @@ Basic usage, read a bytes ,then parse it to `Markdown` , render `Markdown` and o
 ``` golang
 //new and initiate a Marker
 marker:=NewMarker()
-//input []byte is the markdown input , 
+//input []byte is the markdown input ,
 //marker parse the input and return a Markdown object
 markdown:=marker.Mark(input)
 //writer io.Writer
@@ -35,7 +35,7 @@ markdown.WriteToHTML(writer)
 ```
 The `Markdown` is like a tree (dom tree)
 
-If you want to operate the `Markdown` instead of only simple output it. It is all free for you to modify the Markdown tree as you want. The **markdown.go** contain all `struct` in Markdown tree. 
+If you want to operate the `Markdown` instead of only simple output it. It is all free for you to modify the Markdown tree as you want. The **markdown.go** contain all `struct` in Markdown tree.
 
 ###Markdown Grammar Support
 ---

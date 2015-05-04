@@ -45,11 +45,11 @@ type MarkDown struct {
 
 // WriteToHTML ...
 func (markdown MarkDown) WriteToHTML(w io.Writer) {
-	w.Write([]byte("<article class=\"markdown-body\">\n"))
+	w.Write([]byte("<article class=\"markdown-body\">"))
 	for _, part := range markdown.Parts {
 		part.WriteToHTML(w)
 	}
-	w.Write([]byte("\n</article>\n"))
+	w.Write([]byte("</article>"))
 }
 
 //Space ...
@@ -70,9 +70,9 @@ type Code struct {
 
 // WriteToHTML ...
 func (code Code) WriteToHTML(w io.Writer) {
-	w.Write([]byte("<pre><code class=\"" + code.Lang + "\">\n"))
+	w.Write([]byte("<pre><code class=\"" + code.Lang + "\">"))
 	w.Write([]byte(code.Text))
-	w.Write([]byte("\n</code></pre>\n"))
+	w.Write([]byte("</code></pre>"))
 }
 
 //Heading ...
@@ -85,9 +85,9 @@ type Heading struct {
 // WriteToHTML ...
 func (heading Heading) WriteToHTML(w io.Writer) {
 	head := "h" + strconv.Itoa(heading.Depth)
-	w.Write([]byte("<" + head + ">\n"))
+	w.Write([]byte("<" + head + ">"))
 	heading.Text.WriteToHTML(w)
-	w.Write([]byte("\n</" + head + ">\n"))
+	w.Write([]byte("</" + head + ">"))
 }
 
 //Nptable ...
@@ -100,21 +100,21 @@ type Nptable struct {
 
 // WriteToHTML ...
 func (table Nptable) WriteToHTML(w io.Writer) {
-	w.Write([]byte("<table>\n<thead>\n<tr>\n"))
+	w.Write([]byte("<table><thead><tr>"))
 	for _, head := range table.Header {
-		w.Write([]byte("<td>" + head + "</td>\n"))
+		w.Write([]byte("<td>" + head + "</td>"))
 	}
-	w.Write([]byte("\n</tr>\n</thead>\n<tbody>\n"))
+	w.Write([]byte("</tr></thead><tbody>"))
 	for _, line := range table.Cells {
-		w.Write([]byte("<tr>\n"))
+		w.Write([]byte("<tr>"))
 		for _, cell := range line {
 			w.Write([]byte("<td>"))
 			cell.WriteToHTML(w)
-			w.Write([]byte("</td>\n"))
+			w.Write([]byte("</td>"))
 		}
-		w.Write([]byte("</tr>\n"))
+		w.Write([]byte("</tr>"))
 	}
-	w.Write([]byte("</tbody>\n</table>\n"))
+	w.Write([]byte("</tbody></table>"))
 }
 
 //Hr ...
@@ -124,7 +124,7 @@ type Hr struct {
 
 // WriteToHTML ...
 func (hr Hr) WriteToHTML(w io.Writer) {
-	w.Write([]byte("<hr>\n"))
+	w.Write([]byte("<hr>"))
 }
 
 //Blockquote ...
@@ -135,34 +135,34 @@ type Blockquote struct {
 
 // WriteToHTML ...
 func (blockquote Blockquote) WriteToHTML(w io.Writer) {
-	w.Write([]byte("<blockquote>\n"))
+	w.Write([]byte("<blockquote>"))
 	for _, part := range blockquote.Parts {
 		part.WriteToHTML(w)
 	}
-	w.Write([]byte("\n</blockquote>\n"))
+	w.Write([]byte("</blockquote>"))
 }
 
 //List ...
 type List struct {
 	*Block
-	Items   []Node
+	Items   []Item
 	Ordered bool
 }
 
 // WriteToHTML ...
 func (list List) WriteToHTML(w io.Writer) {
 	if list.Ordered {
-		w.Write([]byte("<ol>\n"))
+		w.Write([]byte("<ol>"))
 	} else {
-		w.Write([]byte("<ul>\n"))
+		w.Write([]byte("<ul>"))
 	}
 	for _, item := range list.Items {
 		item.WriteToHTML(w)
 	}
 	if list.Ordered {
-		w.Write([]byte("<ol>\n"))
+		w.Write([]byte("</ol>"))
 	} else {
-		w.Write([]byte("<ul>\n"))
+		w.Write([]byte("</ul>"))
 	}
 }
 
@@ -174,14 +174,14 @@ type Item struct {
 
 // WriteToHTML ...
 func (item Item) WriteToHTML(w io.Writer) {
-	w.Write([]byte("<li>\n"))
+	w.Write([]byte("<li>"))
 	for _, part := range item.Parts {
 		part.WriteToHTML(w)
 	}
 	if item.List != nil {
 		item.List.WriteToHTML(w)
 	}
-	w.Write([]byte("\n</li>\n"))
+	w.Write([]byte("</li>"))
 }
 
 //HTML ...
@@ -215,11 +215,11 @@ type Text struct {
 
 // WriteToHTML ...
 func (text Text) WriteToHTML(w io.Writer) {
-	w.Write([]byte("<p>\n"))
+	w.Write([]byte("<p>"))
 	for _, part := range text.Parts {
 		part.WriteToHTML(w)
 	}
-	w.Write([]byte("\n</p>\n"))
+	w.Write([]byte("</p>"))
 }
 
 //InlineText ...
