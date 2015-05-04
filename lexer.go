@@ -210,7 +210,8 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		//text
 		if node := mark.block.text.Find(bytes); node != nil {
 			bytes = bytes[len(node):]
-			nodes = append(nodes, mark.inlineParse(node))
+			text := mark.inlineParse(node)
+			nodes = append(nodes, BlockText{Text: &text})
 			continue
 		}
 

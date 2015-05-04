@@ -7,7 +7,6 @@ import (
 
 //Node is a interface
 type Node interface {
-	IsBlock() bool
 	WriteToHTML(w io.Writer)
 }
 
@@ -15,26 +14,8 @@ type Node interface {
 type Block struct {
 }
 
-// func (b *Block) String() string {
-// 	mark := new(bytes.Buffer)
-// 	for _, str := range b.children {
-// 		mark.WriteString(str.String())
-// 	}
-// 	return mark.String()
-// }
-
-//IsBlock ...
-func (b *Block) IsBlock() bool {
-	return true
-}
-
 //Inline is a Node which do not have child(Terminal)
 type Inline struct {
-}
-
-//IsBlock ...
-func (inline Inline) IsBlock() bool {
-	return false
 }
 
 //MarkDown ...
@@ -107,8 +88,8 @@ func (table Nptable) WriteToHTML(w io.Writer) {
 	w.Write([]byte("</tr></thead><tbody>"))
 	for _, line := range table.Cells {
 		w.Write([]byte("<tr>"))
-		for _, cell := range line {
-			w.Write([]byte("<td>"))
+		for index, cell := range line {
+			w.Write([]byte("<td style=\"text-align:" + table.Align[index] + "\">"))
 			cell.WriteToHTML(w)
 			w.Write([]byte("</td>"))
 		}
@@ -207,19 +188,30 @@ func (def Def) WriteToHTML(w io.Writer) {
 
 }
 
+//BlockText ...
+type BlockText struct {
+	*Block
+	*Text
+}
+
+// WriteToHTML ...
+func (text BlockText) WriteToHTML(w io.Writer) {
+	w.Write([]byte("<p>"))
+	text.Text.WriteToHTML(w)
+	w.Write([]byte("</p>"))
+}
+
 //Text ...
 type Text struct {
-	*Block
+	*Inline
 	Parts []Node
 }
 
 // WriteToHTML ...
 func (text Text) WriteToHTML(w io.Writer) {
-	w.Write([]byte("<p>"))
 	for _, part := range text.Parts {
 		part.WriteToHTML(w)
 	}
-	w.Write([]byte("</p>"))
 }
 
 //InlineText ...
