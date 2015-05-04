@@ -399,7 +399,7 @@ func removeEndNewline(bytes []byte) []byte {
 func NewMarker() *Marker {
 
 	bullet := `(?:[*+-]|\d+\.)`
-	tag := `(?!(?:a|em|strong|small|s|cite|q|dfn|abbr|data|time|code|var|samp|kbd|sub|sup|i|b|u|mark|ruby|rt|rp|bdi|bdo|span|br|wbr|ins|del|img)\\b)\\w+(?!:/|[^\\w\\s@]*@)\\b`
+	tag := `(?!(?:a|em|strong|small|s|cite|q|dfn|abbr|data|time|code|var|samp|kbd|sub|sup|i|b|u|mark|ruby|rt|rp|bdi|bdo|span|br|wbr|ins|del|img)\b)\w+(?!:/|[^\w\s@]*@)\b`
 	item := `^( *)(bull) ([^\n]*(\n(?!\1bull )[^\n]*)*)(?:\n+|$)`
 	item = strings.Replace(item, "bull", bullet, -1)
 
