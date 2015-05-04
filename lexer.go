@@ -153,9 +153,9 @@ func (mark *Marker) parse(bytes []byte) []Node {
 				ordered = true
 			}
 			list := List{Items: []*Item{}, Ordered: ordered}
-			for matcher := mark.block.item.Matcher(listBytes, pcre.NOTEOL); len(listBytes) > 0 && matcher.Matches(); matcher.Match(listBytes, pcre.NOTEOL) {
+			for matcher := mark.block.item.Matcher(listBytes, matcherFlag); len(listBytes) > 0 && matcher.Matches(); matcher.Match(listBytes, matcherFlag) {
 				listBytes = listBytes[len(matcher.Group(0)):]
-				list.Items = append(list.Items, mark.subList(matcher.Group(0)))
+				list.Items = append(list.Items, mark.subList([]byte(matcher.GroupString(0))))
 			}
 			nodes = append(nodes, list)
 			continue
@@ -349,19 +349,17 @@ func (mark *Marker) inlineStringParse(str string) *Text {
 func (mark *Marker) subList(bytes []byte) *Item {
 	matcher := mark.block.li.Matcher(bytes, matcherFlag)
 	node := matcher.Group(0)
+	bytes = bytes[len(node):]
 	if len(node) == len(bytes) {
 		return &Item{Parts: mark.parse(matcher.Group(3))}
 	}
-
-	matcher = mark.block.item.Matcher(bytes, pcre.NOTEOL)
-	ordered := false
+	item := &Item{&List{Items: []*Item{}}, mark.parse([]byte(matcher.GroupString(3) + "\n"))}
+	matcher = mark.block.item.Matcher(bytes, matcherFlag)
 	bull := matcher.GroupString(2)
 	if !(bull == "*" || bull == "+" || bull == "-") {
-		ordered = true
+		item.Ordered = true
 	}
-	bytes = bytes[len(node):]
-	item := &Item{&List{Items: []*Item{}, Ordered: ordered}, mark.parse(append(matcher.Group(3), '\n'))}
-	for ; len(bytes) > 0; matcher.Match(bytes, pcre.NOTEOL) {
+	for ; len(bytes) > 0 && matcher.Matches(); matcher.Match(bytes, matcherFlag) {
 		bytes = bytes[len(matcher.Group(0)):]
 		item.Items = append(item.Items, mark.subList(matcher.Group(0)))
 	}

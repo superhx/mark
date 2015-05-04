@@ -22,6 +22,8 @@ go get github.com/superhx/markdown
 ```
 ###Usage
 ---
+####Code
+
 Basic usage, read a bytes ,then parse it to `Markdown` , render `Markdown` and output
 ``` golang
 //new and initiate a Marker
@@ -37,7 +39,31 @@ The `Markdown` is like a tree (dom tree)
 
 If you want to operate the `Markdown` instead of only simple output it. It is all free for you to modify the Markdown tree as you want. The **markdown.go** contain all `struct` in Markdown tree.
 
+####Markdown transform to HTML
+
+1. Get the **mark** executable file
+``` sh
+$ cd $GOPATH/src/github.com/superhx/markdown/main
+$ go build
+```
+ or get from google drive
+  - [Mac OS X](https://drive.google.com/file/d/0B3wRzs_xbfwQWUt0OEZOMjdjd1U/view?usp=sharing)
+  - [Linux](https://drive.google.com/file/d/0B3wRzs_xbfwQTjFCS0M4YTZ5SVE/view?usp=sharing)
+  - Windows
+
+2. Tranform markdown file to html file
+``` sh
+$ ./mark input_file_path output_file_path
+```
+or you can just emit the output file path
+```
+$ ./mark input_file_path
+```
+
 ###Markdown Grammar Support
 ---
 - [Basic Markdown](http://daringfireball.net/projects/markdown/syntax)
 - [GitHub Flavored Markdown (gfm)](https://help.github.com/articles/github-flavored-markdown/)
+
+
+<div><a href="https://github.com/superhx/markdown"><img style="position: absolute; top: 0; right: 0; border: 0; width: 149px; height: 149px;" src="http://aral.github.com/fork-me-on-github-retina-ribbons/right-graphite@2x.png" alt="Fork me on GitHub"></a></div>
