@@ -12,17 +12,28 @@
 
 #### Links and Email
 
-An email <example@example.com> link.
+An email <hanxvdovehx@gmail.com> link.
 
-Simple inline link <http://chenluois.com>, another inline link
+Simple inline link <http://github.com/superhx>, another inline link
 
-Simple inline link <http://chenluois.com>, another inline link [Smaller](http://25.io/smaller/), one more inline link with title [Resize](http://resizesafari.com "a Safari extension").
+Simple inline link <http://github.com/superhx>, another inline link [superhx](http://github.com/superhx), one more inline link with title [superhx](http://github.com/superhx "superhx's github").
+
+A [reference style][superhx] link. Input id, then anywhere in the doc, define the link with corresponding id:
+
+[superhx]: http://github.com/superhx "superhx's github"
 
 Titles ( or called tool tips ) in the links are optional.
 
 #### Images
 
-An inline image ![Smaller icon](http://tp1.sinaimg.cn/2929497352/180/40068783046/1 "Title here"), title is optional.
+An inline image, title is optional![Smaller icon](https://avatars2.githubusercontent.com/u/5719209?v=3&s=460 "Title here").
+
+A reference style image ![Resize icon][2].
+
+[2]: https://avatars2.githubusercontent.com/u/5719209?v=3&s=460 "Title here"
+
+Control image style by youself.[<img src="https://avatars2.githubusercontent.com/u/5719209?v=3&s=460" width="100">](http://github.com/superhx)
+
 
 #### Inline code and Block code
 
@@ -90,11 +101,6 @@ atx-style:
 
 
 ### Extra Syntax
-
-#### Footnotes
-
-Footnotes work mostly like reference-style links. A footnote is made of two things: a marker in the text that will become a superscript number; a footnote definition that will be placed in a list of footnotes at the end of the document. A footnote looks like this:
-
 
 #### Strikethrough
 

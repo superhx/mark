@@ -60,7 +60,7 @@ func (code Code) WriteToHTML(w io.Writer) {
 type Heading struct {
 	*Block
 	Depth int
-	Text  Text
+	Text  *Text
 }
 
 // WriteToHTML ...
@@ -76,7 +76,7 @@ type Nptable struct {
 	*Block
 	Header []string
 	Align  []string
-	Cells  [][]Text
+	Cells  [][]*Text
 }
 
 // WriteToHTML ...
@@ -126,7 +126,7 @@ func (blockquote Blockquote) WriteToHTML(w io.Writer) {
 //List ...
 type List struct {
 	*Block
-	Items   []Item
+	Items   []*Item
 	Ordered bool
 }
 
@@ -228,13 +228,14 @@ func (text InlineText) WriteToHTML(w io.Writer) {
 //Link ...
 type Link struct {
 	*Inline
-	Text string
-	Href string
+	Text  string
+	Href  string
+	Title string
 }
 
 // WriteToHTML ...
 func (link Link) WriteToHTML(w io.Writer) {
-	w.Write([]byte("<a href=\"" + link.Href + "\">" + link.Text + "</a>"))
+	w.Write([]byte("<a href=\"" + link.Href + "\" title=\"" + link.Title + "\">" + link.Text + "</a>"))
 }
 
 //Image ...
