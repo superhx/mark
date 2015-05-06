@@ -67,7 +67,7 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		//fences
 		if matcher := mark.block.fences.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
-			nodes = append(nodes, Code{Lang: html.EscapeString(matcher.GroupString(2)), Text: html.EscapeString(matcher.GroupString(3))})
+			nodes = append(nodes, &Code{Lang: html.EscapeString(matcher.GroupString(2)), Text: html.EscapeString(matcher.GroupString(3))})
 			continue
 		}
 
@@ -110,7 +110,7 @@ func (mark *Marker) parse(bytes []byte) []Node {
 				}
 			}
 			table.Cells = cells
-			nodes = append(nodes, table)
+			nodes = append(nodes, &table)
 			continue
 		}
 
@@ -121,7 +121,7 @@ func (mark *Marker) parse(bytes []byte) []Node {
 			if string(node[2]) == "=" {
 				depth = 1
 			}
-			nodes = append(nodes, Heading{
+			nodes = append(nodes, &Heading{
 				Text:  mark.inlineParse(node[1]),
 				Depth: depth,
 			})
@@ -131,7 +131,7 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		//hr
 		if node := mark.block.hr.Find(bytes); node != nil {
 			bytes = bytes[len(node):]
-			nodes = append(nodes, Hr{})
+			nodes = append(nodes, &Hr{})
 			continue
 		}
 
@@ -157,14 +157,14 @@ func (mark *Marker) parse(bytes []byte) []Node {
 				listBytes = listBytes[len(matcher.Group(0)):]
 				list.Items = append(list.Items, mark.subList([]byte(matcher.GroupString(0))))
 			}
-			nodes = append(nodes, list)
+			nodes = append(nodes, &list)
 			continue
 		}
 
 		//html
 		if matcher := mark.block.html.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
-			nodes = append(nodes, HTML{Text: matcher.GroupString(0)})
+			nodes = append(nodes, &HTML{Text: matcher.GroupString(0)})
 			continue
 		}
 
@@ -207,7 +207,7 @@ func (mark *Marker) parse(bytes []byte) []Node {
 			}
 			table.Cells = cells
 
-			nodes = append(nodes, table)
+			nodes = append(nodes, &table)
 			continue
 		}
 

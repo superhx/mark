@@ -44,7 +44,9 @@ func main() {
 	output.WriteString("<link rel=\"stylesheet\" href=\"http://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.5/styles/default.min.css\">")
 	output.WriteString("<style> .markdown-body {  min-width: 200px;max-width: 790px;margin: 0 auto;padding: 30px;}</style>")
 	output.WriteString("</head><body>")
-	markdown.NewMarker().Mark(input).WriteToHTML(output)
+	mark := markdown.NewMarker().Mark(input)
+	writer := markdown.HTMLWriter{Node: mark}
+	writer.WriteTo(output)
 	output.WriteString("</body>")
 	output.WriteString("<script src=\"http://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.5/highlight.min.js\" ></script> <script>hljs.initHighlightingOnLoad();</script>")
 	output.WriteString("</html>")
