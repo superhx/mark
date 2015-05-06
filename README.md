@@ -30,10 +30,11 @@ Basic usage, read a bytes ,then parse it to `Markdown` , render `Markdown` and o
 marker:=NewMarker()
 //input []byte is the markdown input ,
 //marker parse the input and return a Markdown object
-markdown:=marker.Mark(input)
+mark:=marker.Mark(input)
 //writer io.Writer
 //render markdown to html and output to writer
-markdown.WriteToHTML(writer)
+writer := HTMLWriter{mark}
+writer.WriteTo(output)
 ```
 The `Markdown` is like a tree (dom tree)
 
