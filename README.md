@@ -27,7 +27,7 @@ go get github.com/superhx/markdown
 Basic usage, read a bytes ,then parse it to `Markdown` , render `Markdown` and output
 ``` golang
 //new and initiate a Marker
-marker:=NewMarker()
+marker:=marker.NewMarker()
 //input []byte is the markdown input ,
 //marker parse the input and return a Markdown object
 mark:=marker.Mark(input)

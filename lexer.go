@@ -1,4 +1,4 @@
-package markdown
+package marker
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"html"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 //Flag for Markdown
@@ -14,10 +15,12 @@ const (
 	matcherFlag = pcre.PARTIAL_SOFT
 )
 
+var block BlockRex
+var inline InlineRex
+var once sync.Once
+
 //Marker is a mark parser for markdown
 type Marker struct {
-	block  BlockRex
-	inline InlineRex
 	defs   map[string]Def
 	relink []Node
 }
@@ -48,7 +51,7 @@ func (mark *Marker) parse(bytes []byte) []Node {
 	nodes := []Node{}
 	for len(bytes) > 0 {
 		//newline
-		if node := mark.block.newline.Find(bytes); node != nil {
+		if node := block.newline.Find(bytes); node != nil {
 			bytes = bytes[len(node):]
 			if len(node) > 1 {
 				nodes = append(nodes, &Space{})
@@ -56,7 +59,7 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		}
 
 		//code
-		if node := mark.block.code.Find(bytes); node != nil {
+		if node := block.code.Find(bytes); node != nil {
 			bytes = bytes[len(node):]
 			node = regexp.MustCompile(`^ {4}`).ReplaceAll(node, []byte(""))
 			node := removeEndNewline(node)
@@ -65,21 +68,21 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		}
 
 		//fences
-		if matcher := mark.block.fences.Matcher(bytes, matcherFlag); matcher.Matches() {
+		if matcher := block.fences.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
 			nodes = append(nodes, &Code{Lang: html.EscapeString(matcher.GroupString(2)), Text: html.EscapeString(matcher.GroupString(3))})
 			continue
 		}
 
 		//heading
-		if node := mark.block.heading.FindSubmatch(bytes); node != nil {
+		if node := block.heading.FindSubmatch(bytes); node != nil {
 			bytes = bytes[len(node[0]):]
 			nodes = append(nodes, &Heading{Depth: len(node[1]), Text: mark.inlineParse(node[2])})
 			continue
 		}
 
 		//nptable is table no leading pipe
-		if node := mark.block.nptable.FindSubmatch(bytes); node != nil {
+		if node := block.nptable.FindSubmatch(bytes); node != nil {
 			bytes = bytes[len(node[0]):]
 			header := regexp.MustCompile(` *\| *`).Split(string(regexp.MustCompile(`^ *| *\| *$`).ReplaceAll(node[1], []byte(""))), -1)
 			table := Nptable{
@@ -115,7 +118,7 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		}
 
 		//lheading
-		if node := mark.block.lheading.FindSubmatch(bytes); node != nil {
+		if node := block.lheading.FindSubmatch(bytes); node != nil {
 			bytes = bytes[len(node[0]):]
 			depth := 2
 			if string(node[2]) == "=" {
@@ -129,14 +132,14 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		}
 
 		//hr
-		if node := mark.block.hr.Find(bytes); node != nil {
+		if node := block.hr.Find(bytes); node != nil {
 			bytes = bytes[len(node):]
 			nodes = append(nodes, &Hr{})
 			continue
 		}
 
 		//blockquote
-		if matcher := mark.block.blockquote.Matcher(bytes, matcherFlag); matcher.Matches() {
+		if matcher := block.blockquote.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
 			children := mark.parse(regexp.MustCompile(`^ *> ?`).ReplaceAll(matcher.Group(0), []byte("")))
 			nodes = append(nodes, &Blockquote{Parts: children})
@@ -144,7 +147,7 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		}
 
 		// list
-		if matcher := mark.block.list.Matcher(bytes, matcherFlag); matcher.Matches() {
+		if matcher := block.list.Matcher(bytes, matcherFlag); matcher.Matches() {
 			listBytes := append(matcher.Group(1), '\n')
 			bytes = bytes[len(matcher.Group(0)):]
 			ordered := false
@@ -153,7 +156,7 @@ func (mark *Marker) parse(bytes []byte) []Node {
 				ordered = true
 			}
 			list := List{Items: []*Item{}, Ordered: ordered}
-			for matcher := mark.block.item.Matcher(listBytes, matcherFlag); len(listBytes) > 0 && matcher.Matches(); matcher.Match(listBytes, matcherFlag) {
+			for matcher := block.item.Matcher(listBytes, matcherFlag); len(listBytes) > 0 && matcher.Matches(); matcher.Match(listBytes, matcherFlag) {
 				listBytes = listBytes[len(matcher.Group(0)):]
 				list.Items = append(list.Items, mark.subList([]byte(matcher.GroupString(0))))
 			}
@@ -162,21 +165,21 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		}
 
 		//html
-		if matcher := mark.block.html.Matcher(bytes, matcherFlag); matcher.Matches() {
+		if matcher := block.html.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
 			nodes = append(nodes, &HTML{Text: matcher.GroupString(0)})
 			continue
 		}
 
 		//def
-		if node := mark.block.def.FindSubmatch(bytes); node != nil {
+		if node := block.def.FindSubmatch(bytes); node != nil {
 			bytes = bytes[len(node[0]):]
 			mark.defs[string(node[1])] = Def{Href: html.EscapeString(string(node[2])), Title: html.EscapeString(string(node[3]))}
 			continue
 		}
 
 		//table
-		if node := mark.block.table.FindSubmatch(bytes); node != nil {
+		if node := block.table.FindSubmatch(bytes); node != nil {
 			bytes = bytes[len(node[0]):]
 			table := Nptable{
 				Header: regexp.MustCompile(` *\| *`).Split(string(regexp.MustCompile(`^ *| *\| *$`).ReplaceAll(node[1], []byte(""))), -1),
@@ -212,7 +215,7 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		}
 
 		//text
-		if node := mark.block.text.Find(bytes); node != nil {
+		if node := block.text.Find(bytes); node != nil {
 			bytes = bytes[len(node):]
 			text := mark.inlineParse(node)
 			nodes = append(nodes, &BlockText{Text: text})
@@ -232,14 +235,14 @@ func (mark *Marker) inlineParse(bytes []byte) *Text {
 	parts := []Node{}
 	for len(bytes) > 0 {
 		//escape
-		if cap := mark.inline.escape.FindSubmatch(bytes); cap != nil {
+		if cap := inline.escape.FindSubmatch(bytes); cap != nil {
 			bytes = bytes[len(cap[0]):]
 			parts = append(parts, &InlineText{Text: html.EscapeString(string(cap[1]))})
 			continue
 		}
 
 		//autolink
-		if cap := mark.inline.autolink.FindSubmatch(bytes); cap != nil {
+		if cap := inline.autolink.FindSubmatch(bytes); cap != nil {
 			bytes = bytes[len(cap[0]):]
 			var text, href string
 			if string(cap[2]) == "@" {
@@ -258,7 +261,7 @@ func (mark *Marker) inlineParse(bytes []byte) *Text {
 		}
 
 		//url
-		if cap := mark.inline.url.Find(bytes); cap != nil {
+		if cap := inline.url.Find(bytes); cap != nil {
 			bytes = bytes[len(cap):]
 			text := string(cap)
 			href := text
@@ -269,7 +272,7 @@ func (mark *Marker) inlineParse(bytes []byte) *Text {
 		//tag unsolved
 
 		//link
-		if matcher := mark.inline.link.Matcher(bytes, matcherFlag); matcher.Matches() {
+		if matcher := inline.link.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
 			text := matcher.GroupString(1)
 			href := matcher.GroupString(2)
@@ -282,7 +285,7 @@ func (mark *Marker) inlineParse(bytes []byte) *Text {
 		}
 
 		//relink nolink unsolved
-		if matcher := mark.inline.reflink.Matcher(bytes, matcherFlag); matcher.Matches() {
+		if matcher := inline.reflink.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
 			text := matcher.GroupString(1)
 			href := matcher.GroupString(2)
@@ -298,7 +301,7 @@ func (mark *Marker) inlineParse(bytes []byte) *Text {
 		}
 
 		//strong
-		if matcher := mark.inline.strong.Matcher(bytes, matcherFlag); matcher.Matches() {
+		if matcher := inline.strong.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
 			text := matcher.GroupString(1) + matcher.GroupString(2)
 			parts = append(parts, &Strong{Text: html.EscapeString(text)})
@@ -306,7 +309,7 @@ func (mark *Marker) inlineParse(bytes []byte) *Text {
 		}
 
 		//em
-		if matcher := mark.inline.em.Matcher(bytes, matcherFlag); matcher.Matches() {
+		if matcher := inline.em.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
 			text := matcher.GroupString(1) + matcher.GroupString(2)
 			parts = append(parts, &Em{Text: html.EscapeString(text)})
@@ -314,27 +317,27 @@ func (mark *Marker) inlineParse(bytes []byte) *Text {
 		}
 
 		//code
-		if matcher := mark.inline.code.Matcher(bytes, matcherFlag); matcher.Matches() {
+		if matcher := inline.code.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
 			parts = append(parts, &InlineCode{Text: html.EscapeString(matcher.GroupString(2))})
 			continue
 		}
 
 		//br
-		if matcher := mark.inline.br.Matcher(bytes, matcherFlag); matcher.Matches() {
+		if matcher := inline.br.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
 			parts = append(parts, &Br{})
 			continue
 		}
 
 		//del
-		if matcher := mark.inline.del.Matcher(bytes, matcherFlag); matcher.Matches() {
+		if matcher := inline.del.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
 			parts = append(parts, &Del{Text: html.EscapeString(matcher.GroupString(1))})
 		}
 
 		//text
-		if matcher := mark.inline.text.Matcher(bytes, matcherFlag); matcher.Matches() {
+		if matcher := inline.text.Matcher(bytes, matcherFlag); matcher.Matches() {
 			bytes = bytes[len(matcher.Group(0)):]
 			parts = append(parts, &InlineText{Text: html.EscapeString(matcher.GroupString(0))})
 		}
@@ -347,14 +350,14 @@ func (mark *Marker) inlineStringParse(str string) *Text {
 }
 
 func (mark *Marker) subList(bytes []byte) *Item {
-	matcher := mark.block.li.Matcher(bytes, matcherFlag)
+	matcher := block.li.Matcher(bytes, matcherFlag)
 	node := matcher.Group(0)
 	bytes = bytes[len(node):]
 	if len(node) == len(bytes) {
 		return &Item{Parts: mark.parse(matcher.Group(3))}
 	}
 	item := &Item{&List{Items: []*Item{}}, mark.parse([]byte(matcher.GroupString(3) + "\n"))}
-	matcher = mark.block.item.Matcher(bytes, matcherFlag)
+	matcher = block.item.Matcher(bytes, matcherFlag)
 	bull := matcher.GroupString(2)
 	if !(bull == "*" || bull == "+" || bull == "-") {
 		item.Ordered = true
@@ -393,9 +396,7 @@ func removeEndNewline(bytes []byte) []byte {
 	return nil
 }
 
-//NewMarker initiate a new *Markdown and return it
-func NewMarker() *Marker {
-
+func setUp() {
 	bullet := `(?:[*+-]|\d+\.)`
 	tag := `(?!(?:a|em|strong|small|s|cite|q|dfn|abbr|data|time|code|var|samp|kbd|sub|sup|i|b|u|mark|ruby|rt|rp|bdi|bdo|span|br|wbr|ins|del|img)\b)\w+(?!:/|[^\w\s@]*@)\b`
 	item := `^( *)(bull) ([^\n]*(\n(?!\1bull )[^\n]*)*)(?:\n+|$)`
@@ -443,40 +444,47 @@ func NewMarker() *Marker {
 
 	relink := `^!?\[(inside)\]\s*\[([^\]]*)\]`
 	relink = strings.Replace(relink, "inside", inside, -1)
+
+	block = BlockRex{
+		newline:    regexp.MustCompile(`^\n+`),
+		code:       regexp.MustCompile(`^(( {4}| {2}|\t)[^\n]+\n*)+`),
+		fences:     pcre.MustCompile("^ *(`{3,}|~{3,}) *(\\S+)? *\\n([\\s\\S]+?)\\s*\\1 *(?:\\n+|$)", compileFlag),
+		hr:         regexp.MustCompile(hr),
+		heading:    regexp.MustCompile(heading),
+		nptable:    regexp.MustCompile(`^ *(\S.*\|.*)\n *([-:]+ *\|[-| :]*)\n((?:.*\|.*(?:\n|$))*)\n*`),
+		lheading:   regexp.MustCompile(`^([^\n]+)\n *(=|-){2,} *(?:\n+|$)`),
+		blockquote: pcre.MustCompile(blockquote, compileFlag),
+		list:       pcre.MustCompile(list, compileFlag),
+		html:       pcre.MustCompile(html, compileFlag),
+		def:        regexp.MustCompile(def),
+		table:      regexp.MustCompile(`^ *\|(.+)\n *\|( *[-:]+[-| :]*)\n((?: *\|.*(?:\n|$))*)\n`),
+		paragraph:  regexp.MustCompile(paragraph),
+		text:       regexp.MustCompile(`^[^\n]+`),
+		item:       pcre.MustCompile(item, compileFlag),
+		li:         pcre.MustCompile(li, compileFlag),
+	}
+
+	inline = InlineRex{
+		escape:   regexp.MustCompile("^\\\\([\\\\`*{}\\[\\]()#+\\-.!_>])"),
+		autolink: regexp.MustCompile(`^<([^ >]+(@|:\/)[^ >]+)>`),
+		url:      regexp.MustCompile(`^(https?:\/\/[^\s<]+[^<.,:;"')\]\s])`),
+		tag:      regexp.MustCompile(`^<!--[\s\S]*?-->|^<\/?\w+(?:"[^"]*"|'[^']*'|[^'">])*?>`),
+		link:     pcre.MustCompile(link, compileFlag),
+		reflink:  pcre.MustCompile(relink, compileFlag),
+		nolink:   regexp.MustCompile(`^!?\[((?:\[[^\]]*\]|[^\[\]])*)\]`),
+		strong:   pcre.MustCompile(`^__([\s\S]+?)__(?!_)|^\*\*([\s\S]+?)\*\*(?!\*)`, compileFlag),
+		em:       pcre.MustCompile(`^\b_((?:__|[\s\S])+?)_\b|^\*((?:\*\*|[\s\S])+?)\*(?!\*)`, compileFlag),
+		code:     pcre.MustCompile("^(`+)\\s*([\\s\\S]*?[^`])\\s*\\1(?!`)", compileFlag),
+		br:       pcre.MustCompile(`^ {2,}\n(?!\s*$)`, compileFlag),
+		del:      pcre.MustCompile(`^~~(?=\S)([\s\S]*?\S)~~`, compileFlag),
+		text:     pcre.MustCompile("^[\\s\\S]+?(?=[\\\\<!\\[_*`]| {2,}\\n|$)", compileFlag),
+	}
+}
+
+//NewMarker initiate a new *Markdown and return it
+func NewMarker() *Marker {
+	once.Do(setUp)
 	mark := &Marker{
-		block: BlockRex{
-			newline:    regexp.MustCompile(`^\n+`),
-			code:       regexp.MustCompile(`^(( {4}| {2}|\t)[^\n]+\n*)+`),
-			fences:     pcre.MustCompile("^ *(`{3,}|~{3,}) *(\\S+)? *\\n([\\s\\S]+?)\\s*\\1 *(?:\\n+|$)", compileFlag),
-			hr:         regexp.MustCompile(hr),
-			heading:    regexp.MustCompile(heading),
-			nptable:    regexp.MustCompile(`^ *(\S.*\|.*)\n *([-:]+ *\|[-| :]*)\n((?:.*\|.*(?:\n|$))*)\n*`),
-			lheading:   regexp.MustCompile(`^([^\n]+)\n *(=|-){2,} *(?:\n+|$)`),
-			blockquote: pcre.MustCompile(blockquote, compileFlag),
-			list:       pcre.MustCompile(list, compileFlag),
-			html:       pcre.MustCompile(html, compileFlag),
-			def:        regexp.MustCompile(def),
-			table:      regexp.MustCompile(`^ *\|(.+)\n *\|( *[-:]+[-| :]*)\n((?: *\|.*(?:\n|$))*)\n`),
-			paragraph:  regexp.MustCompile(paragraph),
-			text:       regexp.MustCompile(`^[^\n]+`),
-			item:       pcre.MustCompile(item, compileFlag),
-			li:         pcre.MustCompile(li, compileFlag),
-		},
-		inline: InlineRex{
-			escape:   regexp.MustCompile("^\\\\([\\\\`*{}\\[\\]()#+\\-.!_>])"),
-			autolink: regexp.MustCompile(`^<([^ >]+(@|:\/)[^ >]+)>`),
-			url:      regexp.MustCompile(`^(https?:\/\/[^\s<]+[^<.,:;"')\]\s])`),
-			tag:      regexp.MustCompile(`^<!--[\s\S]*?-->|^<\/?\w+(?:"[^"]*"|'[^']*'|[^'">])*?>`),
-			link:     pcre.MustCompile(link, compileFlag),
-			reflink:  pcre.MustCompile(relink, compileFlag),
-			nolink:   regexp.MustCompile(`^!?\[((?:\[[^\]]*\]|[^\[\]])*)\]`),
-			strong:   pcre.MustCompile(`^__([\s\S]+?)__(?!_)|^\*\*([\s\S]+?)\*\*(?!\*)`, compileFlag),
-			em:       pcre.MustCompile(`^\b_((?:__|[\s\S])+?)_\b|^\*((?:\*\*|[\s\S])+?)\*(?!\*)`, compileFlag),
-			code:     pcre.MustCompile("^(`+)\\s*([\\s\\S]*?[^`])\\s*\\1(?!`)", compileFlag),
-			br:       pcre.MustCompile(`^ {2,}\n(?!\s*$)`, compileFlag),
-			del:      pcre.MustCompile(`^~~(?=\S)([\s\S]*?\S)~~`, compileFlag),
-			text:     pcre.MustCompile("^[\\s\\S]+?(?=[\\\\<!\\[_*`]| {2,}\\n|$)", compileFlag),
-		},
 		defs:   make(map[string]Def),
 		relink: []Node{},
 	}
