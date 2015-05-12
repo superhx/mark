@@ -19,12 +19,6 @@ var block BlockRex
 var inline InlineRex
 var once sync.Once
 
-//Marker is a mark parser for markdown
-type Marker struct {
-	defs   map[string]Def
-	relink []Node
-}
-
 //BlockRex ...
 type BlockRex struct {
 	newline, code, hr, heading, nptable, lheading, def, table, paragraph, text *regexp.Regexp
@@ -35,6 +29,22 @@ type BlockRex struct {
 type InlineRex struct {
 	escape, autolink, url, tag, nolink             *regexp.Regexp
 	link, reflink, strong, em, code, br, del, text pcre.Regexp
+}
+
+//Marker is a mark parser for markdown
+type Marker struct {
+	defs   map[string]Def
+	relink []Node
+}
+
+//NewMarker initiate a new *Markdown and return it
+func NewMarker() *Marker {
+	once.Do(setUp)
+	mark := &Marker{
+		defs:   make(map[string]Def),
+		relink: []Node{},
+	}
+	return mark
 }
 
 //Mark parse the markdown file,then return MarkDown Obj
@@ -479,14 +489,4 @@ func setUp() {
 		del:      pcre.MustCompile(`^~~(?=\S)([\s\S]*?\S)~~`, compileFlag),
 		text:     pcre.MustCompile("^[\\s\\S]+?(?=[\\\\<!\\[_*`]| {2,}\\n|$)", compileFlag),
 	}
-}
-
-//NewMarker initiate a new *Markdown and return it
-func NewMarker() *Marker {
-	once.Do(setUp)
-	mark := &Marker{
-		defs:   make(map[string]Def),
-		relink: []Node{},
-	}
-	return mark
 }
