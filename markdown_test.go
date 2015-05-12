@@ -16,7 +16,7 @@ func TestMarker(t *testing.T) {
 	defer func() {
 		output.Close()
 	}()
-	output.WriteString("<html><head>")
+	output.WriteString("<!DOCTYPE HTML><html><head><meta charset=\"UTF-8\">")
 	output.WriteString("<link rel=\"stylesheet\" href=\"https://cdn.lukej.me/github-markdown-css/0.2.0/github-markdown.min.css\">")
 	output.WriteString("<link rel=\"stylesheet\" href=\"http://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.5/styles/default.min.css\">")
 	output.WriteString("<style> .markdown-body {  min-width: 200px;max-width: 790px;margin: 0 auto;padding: 30px;}</style>")

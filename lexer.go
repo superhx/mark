@@ -11,8 +11,9 @@ import (
 
 //Flag for Markdown
 const (
-	compileFlag = pcre.UTF8
-	matcherFlag = pcre.PARTIAL_SOFT
+	compileFlag    = pcre.UTF8
+	matcherFlag    = pcre.PARTIAL_SOFT
+	goroutineCount = 100
 )
 
 var block BlockRex
@@ -35,6 +36,7 @@ type InlineRex struct {
 type Marker struct {
 	defs   map[string]Def
 	relink []Node
+	pool   chan bool
 }
 
 //NewMarker initiate a new *Markdown and return it
@@ -43,6 +45,7 @@ func NewMarker() *Marker {
 	mark := &Marker{
 		defs:   make(map[string]Def),
 		relink: []Node{},
+		pool:   make(chan bool, goroutineCount),
 	}
 	return mark
 }
@@ -53,6 +56,9 @@ func (mark *Marker) Mark(bytes []byte) *MarkDown {
 	bytes = regexp.MustCompile("\u00a0").ReplaceAll(bytes, []byte("    "))
 	bytes = regexp.MustCompile("\u2424").ReplaceAll(bytes, []byte("\n"))
 	markdown := &MarkDown{Parts: mark.parse(bytes)}
+	for i := 0; i < goroutineCount; i++ {
+		mark.pool <- false
+	}
 	mark.link()
 	return markdown
 }
@@ -87,7 +93,9 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		//heading
 		if node := block.heading.FindSubmatch(bytes); node != nil {
 			bytes = bytes[len(node[0]):]
-			nodes = append(nodes, &Heading{Depth: len(node[1]), Text: mark.inlineParse(node[2])})
+			text := &Text{}
+			mark.inlineParse(node[2], text)
+			nodes = append(nodes, &Heading{Depth: len(node[1]), Text: text})
 			continue
 		}
 
@@ -119,7 +127,9 @@ func (mark *Marker) parse(bytes []byte) []Node {
 				temp := spliter.Split(line[i], -1)
 				cells[i] = make([]*Text, len(temp))
 				for j, length := 0, len(temp); j < length; j++ {
-					cells[i][j] = mark.inlineStringParse(temp[j])
+					text := &Text{}
+					mark.inlineStringParse(temp[j], text)
+					cells[i][j] = text
 				}
 			}
 			table.Cells = cells
@@ -134,8 +144,10 @@ func (mark *Marker) parse(bytes []byte) []Node {
 			if string(node[2]) == "=" {
 				depth = 1
 			}
+			text := &Text{}
+			mark.inlineParse(node[1], text)
 			nodes = append(nodes, &Heading{
-				Text:  mark.inlineParse(node[1]),
+				Text:  text,
 				Depth: depth,
 			})
 			continue
@@ -215,7 +227,9 @@ func (mark *Marker) parse(bytes []byte) []Node {
 				temp := spliter.Split(replacer.ReplaceAllString(line[i], ""), -1)
 				cells[i] = make([]*Text, len(temp))
 				for j, length := 0, len(temp); j < length; j++ {
-					cells[i][j] = mark.inlineStringParse(temp[j])
+					text := &Text{}
+					mark.inlineStringParse(temp[j], text)
+					cells[i][j] = text
 				}
 			}
 			table.Cells = cells
@@ -227,7 +241,8 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		//text
 		if node := block.text.Find(bytes); node != nil {
 			bytes = bytes[len(node):]
-			text := mark.inlineParse(node)
+			text := &Text{}
+			mark.inlineParse(node, text)
 			nodes = append(nodes, &BlockText{Text: text})
 			continue
 		}
@@ -241,122 +256,126 @@ func (mark *Marker) parse(bytes []byte) []Node {
 	return nodes
 }
 
-func (mark *Marker) inlineParse(bytes []byte) *Text {
-	parts := []Node{}
-	for len(bytes) > 0 {
-		//escape
-		if cap := inline.escape.FindSubmatch(bytes); cap != nil {
-			bytes = bytes[len(cap[0]):]
-			parts = append(parts, &InlineText{Text: html.EscapeString(string(cap[1]))})
-			continue
-		}
+func (mark *Marker) inlineParse(bytes []byte, text *Text) {
+	mark.pool <- true
+	go func() {
+		parts := []Node{}
+		for len(bytes) > 0 {
+			//escape
+			if cap := inline.escape.FindSubmatch(bytes); cap != nil {
+				bytes = bytes[len(cap[0]):]
+				parts = append(parts, &InlineText{Text: html.EscapeString(string(cap[1]))})
+				continue
+			}
 
-		//autolink
-		if cap := inline.autolink.FindSubmatch(bytes); cap != nil {
-			bytes = bytes[len(cap[0]):]
-			var text, href string
-			if string(cap[2]) == "@" {
-				if cap[1][6] == ':' {
-					text = string(cap[1][7:])
+			//autolink
+			if cap := inline.autolink.FindSubmatch(bytes); cap != nil {
+				bytes = bytes[len(cap[0]):]
+				var text, href string
+				if string(cap[2]) == "@" {
+					if cap[1][6] == ':' {
+						text = string(cap[1][7:])
+					} else {
+						text = string(cap[1])
+					}
+					href = "mainto:" + text
 				} else {
 					text = string(cap[1])
+					href = text
 				}
-				href = "mainto:" + text
-			} else {
-				text = string(cap[1])
-				href = text
+				parts = append(parts, &Link{Text: html.EscapeString(text), Href: html.EscapeString(href)})
+				continue
 			}
-			parts = append(parts, &Link{Text: html.EscapeString(text), Href: html.EscapeString(href)})
-			continue
-		}
 
-		//url
-		if cap := inline.url.Find(bytes); cap != nil {
-			bytes = bytes[len(cap):]
-			text := string(cap)
-			href := text
-			parts = append(parts, &Link{Text: html.EscapeString(text), Href: html.EscapeString(href)})
-			continue
-		}
-
-		//tag unsolved
-
-		//link
-		if matcher := inline.link.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			text := matcher.GroupString(1)
-			href := matcher.GroupString(2)
-			if matcher.Group(0)[0] != '!' {
-				parts = append(parts, &Link{Text: text, Href: html.EscapeString(href), Title: html.EscapeString(matcher.GroupString(3))})
-			} else {
-				parts = append(parts, &Image{Text: html.EscapeString(text), Href: html.EscapeString(href), Title: matcher.GroupString(3)})
+			//url
+			if cap := inline.url.Find(bytes); cap != nil {
+				bytes = bytes[len(cap):]
+				text := string(cap)
+				href := text
+				parts = append(parts, &Link{Text: html.EscapeString(text), Href: html.EscapeString(href)})
+				continue
 			}
-			continue
-		}
 
-		//relink nolink unsolved
-		if matcher := inline.reflink.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			text := matcher.GroupString(1)
-			href := matcher.GroupString(2)
-			var node Node
-			if matcher.Group(0)[0] != '!' {
-				node = &Link{Text: text, Href: html.EscapeString(href)}
-			} else {
-				node = &Image{Text: html.EscapeString(text), Href: html.EscapeString(href)}
+			//tag unsolved
+
+			//link
+			if matcher := inline.link.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				text := matcher.GroupString(1)
+				href := matcher.GroupString(2)
+				if matcher.Group(0)[0] != '!' {
+					parts = append(parts, &Link{Text: text, Href: html.EscapeString(href), Title: html.EscapeString(matcher.GroupString(3))})
+				} else {
+					parts = append(parts, &Image{Text: html.EscapeString(text), Href: html.EscapeString(href), Title: matcher.GroupString(3)})
+				}
+				continue
 			}
-			parts = append(parts, node)
-			mark.relink = append(mark.relink, node)
 
-		}
+			//relink nolink unsolved
+			if matcher := inline.reflink.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				text := matcher.GroupString(1)
+				href := matcher.GroupString(2)
+				var node Node
+				if matcher.Group(0)[0] != '!' {
+					node = &Link{Text: text, Href: html.EscapeString(href)}
+				} else {
+					node = &Image{Text: html.EscapeString(text), Href: html.EscapeString(href)}
+				}
+				parts = append(parts, node)
+				mark.relink = append(mark.relink, node)
 
-		//strong
-		if matcher := inline.strong.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			text := matcher.GroupString(1) + matcher.GroupString(2)
-			parts = append(parts, &Strong{Text: html.EscapeString(text)})
-			continue
-		}
+			}
 
-		//em
-		if matcher := inline.em.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			text := matcher.GroupString(1) + matcher.GroupString(2)
-			parts = append(parts, &Em{Text: html.EscapeString(text)})
-			continue
-		}
+			//strong
+			if matcher := inline.strong.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				text := matcher.GroupString(1) + matcher.GroupString(2)
+				parts = append(parts, &Strong{Text: html.EscapeString(text)})
+				continue
+			}
 
-		//code
-		if matcher := inline.code.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			parts = append(parts, &InlineCode{Text: html.EscapeString(matcher.GroupString(2))})
-			continue
-		}
+			//em
+			if matcher := inline.em.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				text := matcher.GroupString(1) + matcher.GroupString(2)
+				parts = append(parts, &Em{Text: html.EscapeString(text)})
+				continue
+			}
 
-		//br
-		if matcher := inline.br.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			parts = append(parts, &Br{})
-			continue
-		}
+			//code
+			if matcher := inline.code.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				parts = append(parts, &InlineCode{Text: html.EscapeString(matcher.GroupString(2))})
+				continue
+			}
 
-		//del
-		if matcher := inline.del.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			parts = append(parts, &Del{Text: html.EscapeString(matcher.GroupString(1))})
-		}
+			//br
+			if matcher := inline.br.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				parts = append(parts, &Br{})
+				continue
+			}
 
-		//text
-		if matcher := inline.text.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			parts = append(parts, &InlineText{Text: html.EscapeString(matcher.GroupString(0))})
+			//del
+			if matcher := inline.del.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				parts = append(parts, &Del{Text: html.EscapeString(matcher.GroupString(1))})
+			}
+
+			//text
+			if matcher := inline.text.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				parts = append(parts, &InlineText{Text: html.EscapeString(matcher.GroupString(0))})
+			}
 		}
-	}
-	return &Text{Parts: parts}
+		text.Parts = parts
+		<-mark.pool
+	}()
 }
 
-func (mark *Marker) inlineStringParse(str string) *Text {
-	return mark.inlineParse([]byte(str))
+func (mark *Marker) inlineStringParse(str string, text *Text) {
+	mark.inlineParse([]byte(str), text)
 }
 
 func (mark *Marker) subList(bytes []byte) *Item {
