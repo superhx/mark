@@ -39,19 +39,15 @@ type Marker struct {
 	pool   chan bool
 }
 
-//NewMarker initiate a new *Markdown and return it
-func NewMarker() *Marker {
+//Mark parse the markdown file,then return MarkDown Obj
+func Mark(bytes []byte) *MarkDown {
 	once.Do(setUp)
 	mark := &Marker{
 		defs:   make(map[string]Def),
 		relink: []Node{},
 		pool:   make(chan bool, goroutineCount),
 	}
-	return mark
-}
 
-//Mark parse the markdown file,then return MarkDown Obj
-func (mark *Marker) Mark(bytes []byte) *MarkDown {
 	bytes = regexp.MustCompile("\r\n|\r").ReplaceAll(bytes, []byte("\n"))
 	bytes = regexp.MustCompile("\u00a0").ReplaceAll(bytes, []byte("    "))
 	bytes = regexp.MustCompile("\u2424").ReplaceAll(bytes, []byte("\n"))
