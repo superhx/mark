@@ -21,9 +21,7 @@ func TestMarker(t *testing.T) {
 	output.WriteString("<link rel=\"stylesheet\" href=\"http://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.5/styles/default.min.css\">")
 	output.WriteString("<style> .markdown-body {  min-width: 200px;max-width: 790px;margin: 0 auto;padding: 30px;}</style>")
 	output.WriteString("</head><body>")
-	markdown := Mark(input)
-	writer := HTMLWriter{markdown}
-	writer.WriteTo(output)
+	NewHTMLWriter(Mark(input)).WriteTo(output)
 	output.WriteString("</body>")
 	output.WriteString("<script src=\"http://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.5/highlight.min.js\" ></script> <script>hljs.initHighlightingOnLoad();</script>")
 	output.WriteString("</html>")

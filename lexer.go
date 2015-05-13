@@ -40,7 +40,7 @@ type Marker struct {
 }
 
 //Mark parse the markdown file,then return MarkDown Obj
-func Mark(bytes []byte) *MarkDown {
+func Mark(bytes []byte) (markdown *MarkDown) {
 	once.Do(setUp)
 	mark := &Marker{
 		defs:   make(map[string]Def),
@@ -51,12 +51,12 @@ func Mark(bytes []byte) *MarkDown {
 	bytes = regexp.MustCompile("\r\n|\r").ReplaceAll(bytes, []byte("\n"))
 	bytes = regexp.MustCompile("\u00a0").ReplaceAll(bytes, []byte("    "))
 	bytes = regexp.MustCompile("\u2424").ReplaceAll(bytes, []byte("\n"))
-	markdown := &MarkDown{Parts: mark.parse(bytes)}
+	markdown = &MarkDown{Parts: mark.parse(bytes)}
 	for i := 0; i < goroutineCount; i++ {
 		mark.pool <- false
 	}
 	mark.link()
-	return markdown
+	return
 }
 
 func (mark *Marker) parse(bytes []byte) []Node {
@@ -252,120 +252,131 @@ func (mark *Marker) parse(bytes []byte) []Node {
 	return nodes
 }
 
+//InlineParse ...
+func (mark *Marker) InlineParse(bytes []byte) (text *Text) {
+	mark.inlineSynParse(bytes, text)
+	mark.link()
+	return
+}
+
+func (mark *Marker) inlineSynParse(bytes []byte, text *Text) {
+	parts := []Node{}
+	for len(bytes) > 0 {
+		//escape
+		if cap := inline.escape.FindSubmatch(bytes); cap != nil {
+			bytes = bytes[len(cap[0]):]
+			parts = append(parts, &InlineText{Text: html.EscapeString(string(cap[1]))})
+			continue
+		}
+
+		//autolink
+		if cap := inline.autolink.FindSubmatch(bytes); cap != nil {
+			bytes = bytes[len(cap[0]):]
+			var text, href string
+			if string(cap[2]) == "@" {
+				if cap[1][6] == ':' {
+					text = string(cap[1][7:])
+				} else {
+					text = string(cap[1])
+				}
+				href = "mainto:" + text
+			} else {
+				text = string(cap[1])
+				href = text
+			}
+			parts = append(parts, &Link{Text: html.EscapeString(text), Href: html.EscapeString(href)})
+			continue
+		}
+
+		//url
+		if cap := inline.url.Find(bytes); cap != nil {
+			bytes = bytes[len(cap):]
+			text := string(cap)
+			href := text
+			parts = append(parts, &Link{Text: html.EscapeString(text), Href: html.EscapeString(href)})
+			continue
+		}
+
+		//tag unsolved
+
+		//link
+		if matcher := inline.link.Matcher(bytes, matcherFlag); matcher.Matches() {
+			bytes = bytes[len(matcher.Group(0)):]
+			text := matcher.GroupString(1)
+			href := matcher.GroupString(2)
+			if matcher.Group(0)[0] != '!' {
+				parts = append(parts, &Link{Text: text, Href: html.EscapeString(href), Title: html.EscapeString(matcher.GroupString(3))})
+			} else {
+				parts = append(parts, &Image{Text: html.EscapeString(text), Href: html.EscapeString(href), Title: matcher.GroupString(3)})
+			}
+			continue
+		}
+
+		//relink nolink unsolved
+		if matcher := inline.reflink.Matcher(bytes, matcherFlag); matcher.Matches() {
+			bytes = bytes[len(matcher.Group(0)):]
+			text := matcher.GroupString(1)
+			href := matcher.GroupString(2)
+			var node Node
+			if matcher.Group(0)[0] != '!' {
+				node = &Link{Text: text, Href: html.EscapeString(href)}
+			} else {
+				node = &Image{Text: html.EscapeString(text), Href: html.EscapeString(href)}
+			}
+			parts = append(parts, node)
+			mark.relink = append(mark.relink, node)
+
+		}
+
+		//strong
+		if matcher := inline.strong.Matcher(bytes, matcherFlag); matcher.Matches() {
+			bytes = bytes[len(matcher.Group(0)):]
+			text := matcher.GroupString(1) + matcher.GroupString(2)
+			parts = append(parts, &Strong{Text: html.EscapeString(text)})
+			continue
+		}
+
+		//em
+		if matcher := inline.em.Matcher(bytes, matcherFlag); matcher.Matches() {
+			bytes = bytes[len(matcher.Group(0)):]
+			text := matcher.GroupString(1) + matcher.GroupString(2)
+			parts = append(parts, &Em{Text: html.EscapeString(text)})
+			continue
+		}
+
+		//code
+		if matcher := inline.code.Matcher(bytes, matcherFlag); matcher.Matches() {
+			bytes = bytes[len(matcher.Group(0)):]
+			parts = append(parts, &InlineCode{Text: html.EscapeString(matcher.GroupString(2))})
+			continue
+		}
+
+		//br
+		if matcher := inline.br.Matcher(bytes, matcherFlag); matcher.Matches() {
+			bytes = bytes[len(matcher.Group(0)):]
+			parts = append(parts, &Br{})
+			continue
+		}
+
+		//del
+		if matcher := inline.del.Matcher(bytes, matcherFlag); matcher.Matches() {
+			bytes = bytes[len(matcher.Group(0)):]
+			parts = append(parts, &Del{Text: html.EscapeString(matcher.GroupString(1))})
+		}
+
+		//text
+		if matcher := inline.text.Matcher(bytes, matcherFlag); matcher.Matches() {
+			bytes = bytes[len(matcher.Group(0)):]
+			parts = append(parts, &InlineText{Text: html.EscapeString(matcher.GroupString(0))})
+		}
+	}
+	text.Parts = parts
+}
+
 func (mark *Marker) inlineParse(bytes []byte, text *Text) {
 	mark.pool <- true
 	go func() {
-		parts := []Node{}
-		for len(bytes) > 0 {
-			//escape
-			if cap := inline.escape.FindSubmatch(bytes); cap != nil {
-				bytes = bytes[len(cap[0]):]
-				parts = append(parts, &InlineText{Text: html.EscapeString(string(cap[1]))})
-				continue
-			}
-
-			//autolink
-			if cap := inline.autolink.FindSubmatch(bytes); cap != nil {
-				bytes = bytes[len(cap[0]):]
-				var text, href string
-				if string(cap[2]) == "@" {
-					if cap[1][6] == ':' {
-						text = string(cap[1][7:])
-					} else {
-						text = string(cap[1])
-					}
-					href = "mainto:" + text
-				} else {
-					text = string(cap[1])
-					href = text
-				}
-				parts = append(parts, &Link{Text: html.EscapeString(text), Href: html.EscapeString(href)})
-				continue
-			}
-
-			//url
-			if cap := inline.url.Find(bytes); cap != nil {
-				bytes = bytes[len(cap):]
-				text := string(cap)
-				href := text
-				parts = append(parts, &Link{Text: html.EscapeString(text), Href: html.EscapeString(href)})
-				continue
-			}
-
-			//tag unsolved
-
-			//link
-			if matcher := inline.link.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
-				text := matcher.GroupString(1)
-				href := matcher.GroupString(2)
-				if matcher.Group(0)[0] != '!' {
-					parts = append(parts, &Link{Text: text, Href: html.EscapeString(href), Title: html.EscapeString(matcher.GroupString(3))})
-				} else {
-					parts = append(parts, &Image{Text: html.EscapeString(text), Href: html.EscapeString(href), Title: matcher.GroupString(3)})
-				}
-				continue
-			}
-
-			//relink nolink unsolved
-			if matcher := inline.reflink.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
-				text := matcher.GroupString(1)
-				href := matcher.GroupString(2)
-				var node Node
-				if matcher.Group(0)[0] != '!' {
-					node = &Link{Text: text, Href: html.EscapeString(href)}
-				} else {
-					node = &Image{Text: html.EscapeString(text), Href: html.EscapeString(href)}
-				}
-				parts = append(parts, node)
-				mark.relink = append(mark.relink, node)
-
-			}
-
-			//strong
-			if matcher := inline.strong.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
-				text := matcher.GroupString(1) + matcher.GroupString(2)
-				parts = append(parts, &Strong{Text: html.EscapeString(text)})
-				continue
-			}
-
-			//em
-			if matcher := inline.em.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
-				text := matcher.GroupString(1) + matcher.GroupString(2)
-				parts = append(parts, &Em{Text: html.EscapeString(text)})
-				continue
-			}
-
-			//code
-			if matcher := inline.code.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
-				parts = append(parts, &InlineCode{Text: html.EscapeString(matcher.GroupString(2))})
-				continue
-			}
-
-			//br
-			if matcher := inline.br.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
-				parts = append(parts, &Br{})
-				continue
-			}
-
-			//del
-			if matcher := inline.del.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
-				parts = append(parts, &Del{Text: html.EscapeString(matcher.GroupString(1))})
-			}
-
-			//text
-			if matcher := inline.text.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
-				parts = append(parts, &InlineText{Text: html.EscapeString(matcher.GroupString(0))})
-			}
-		}
-		text.Parts = parts
+		mark.inlineSynParse(bytes, text)
 		<-mark.pool
 	}()
 }

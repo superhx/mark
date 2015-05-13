@@ -143,3 +143,8 @@ func (html HTMLWriter) writeTo(node Node, w io.Writer) {
 	}
 	return
 }
+
+//NewHTMLWriter ...
+func NewHTMLWriter(node Node) io.WriterTo {
+	return &HTMLWriter{node}
+}

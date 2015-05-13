@@ -32,8 +32,8 @@ marker:=marker.NewMarker()
 //marker parse the input and return a Markdown object
 mark:=marker.Mark(input)
 //writer io.Writer
-//render markdown to html and output to writer
-writer := HTMLWriter{mark}
+//render markdown to html and output to writer(without style sheet,see markdown_test to pretty)
+writer := marker.NewHTMLWriter(mark)
 writer.WriteTo(output)
 ```
 The `Markdown` is like a tree (dom tree)
