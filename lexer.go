@@ -18,7 +18,91 @@ const (
 
 var block BlockRex
 var inline InlineRex
-var once sync.Once
+
+func init() {
+	bullet := `(?:[*+-]|\d+\.)`
+	tag := `(?!(?:a|em|strong|small|s|cite|q|dfn|abbr|data|time|code|var|samp|kbd|sub|sup|i|b|u|mark|ruby|rt|rp|bdi|bdo|span|br|wbr|ins|del|img)\b)\w+(?!:/|[^\w\s@]*@)\b`
+	item := `^( *)(bull) ([^\n]*(\n(?!\1bull )[^\n]*)*)(?:\n+|$)`
+	item = strings.Replace(item, "bull", bullet, -1)
+
+	li := `^( *)(bull) ([^\n]*(\n(?! *bull )[^\n]*)*)(?:\n+|$)`
+	li = strings.Replace(li, "bull", bullet, -1)
+
+	hr := `^( *[-*_]){3,} *(?:\n+|$)`
+
+	heading := `^ *(#{1,6}) *([^\n]+?) *#* *(?:\n+|$)`
+
+	lheading := `^([^\n]+)\n *(=|-){2,} *(?:\n+|$)`
+
+	def := `^ *\[([^\]]+)\]: *<?([^\s>]+)>?(?: +["(]([^\n]+)[")])? *(?:\n+|$)`
+
+	blockquote := `^( *>[^\n]+(\n(?!def)[^\n]+)*\n*)+`
+	blockquote = strings.Replace(blockquote, "def", def, -1)
+
+	list := `^(( *)(bull) [\s\S]+?)(?:hr|def|\n{2,}(?! )(?!\2bull )\n*|\s*$)`
+	list = strings.Replace(list, "bull", bullet, -1)
+	list = strings.Replace(list, "hr", `\n+(?=\2?(?:[-*_] *){3,}(?:\n+|$))`, -1)
+	list = strings.Replace(list, "def", `\n+(?=`+def+`)`, -1)
+
+	html := `^ *(?:comment *(?:\n|\s*$)|closed *(?:\n{2,}|\s*$)|closing *(?:\n{2,}|\s*$))`
+	html = strings.Replace(html, "comment", `<!--[\s\S]*?-->`, -1)
+	html = strings.Replace(html, "closed", `<(tag)[\s\S]+?<\/\1>`, -1)
+	html = strings.Replace(html, "closing", `<tag(?:"[^"]*"|'[^']*'|[^'">])*?>`, -1)
+	html = strings.Replace(html, `tag`, tag, -1)
+
+	paragraph := `^((?:[^\n]+\n?(?!hr|heading|lheading|blockquote|tag|def))+)\n*`
+	paragraph = strings.Replace(paragraph, "hr", hr, -1)
+	paragraph = strings.Replace(paragraph, "heading", heading, -1)
+	paragraph = strings.Replace(paragraph, "lheading", lheading, -1)
+	paragraph = strings.Replace(paragraph, "blockquote", blockquote, -1)
+	paragraph = strings.Replace(paragraph, "tag", tag, -1)
+	paragraph = strings.Replace(def, "def", def, -1)
+
+	inside := `(?:\[[^\]]*\]|[^\[\]]|\](?=[^\[]*\]))*`
+	href := `\s*<?([\s\S]*?)>?(?:\s+['"]([\s\S]*?)['"])?\s*`
+
+	link := `^!?\[(inside)\]\(href\)`
+	link = strings.Replace(link, "inside", inside, -1)
+	link = strings.Replace(link, "href", href, -1)
+
+	relink := `^!?\[(inside)\]\s*\[([^\]]*)\]`
+	relink = strings.Replace(relink, "inside", inside, -1)
+
+	block = BlockRex{
+		newline:    regexp.MustCompile(`^\n+`),
+		code:       regexp.MustCompile(`^(( {4}| {2}|\t)[^\n]+\n*)+`),
+		fences:     pcre.MustCompile("^ *(`{3,}|~{3,}) *(\\S+)? *\\n([\\s\\S]+?)\\s*\\1 *(?:\\n+|$)", compileFlag),
+		hr:         regexp.MustCompile(hr),
+		heading:    regexp.MustCompile(heading),
+		nptable:    regexp.MustCompile(`^ *(\S.*\|.*)\n *([-:]+ *\|[-| :]*)\n((?:.*\|.*(?:\n|$))*)\n*`),
+		lheading:   regexp.MustCompile(`^([^\n]+)\n *(=|-){2,} *(?:\n+|$)`),
+		blockquote: pcre.MustCompile(blockquote, compileFlag),
+		list:       pcre.MustCompile(list, compileFlag),
+		html:       pcre.MustCompile(html, compileFlag),
+		def:        regexp.MustCompile(def),
+		table:      regexp.MustCompile(`^ *\|(.+)\n *\|( *[-:]+[-| :]*)\n((?: *\|.*(?:\n|$))*)\n`),
+		paragraph:  regexp.MustCompile(paragraph),
+		text:       regexp.MustCompile(`^[^\n]+`),
+		item:       pcre.MustCompile(item, compileFlag),
+		li:         pcre.MustCompile(li, compileFlag),
+	}
+
+	inline = InlineRex{
+		escape:   regexp.MustCompile("^\\\\([\\\\`*{}\\[\\]()#+\\-.!_>])"),
+		autolink: regexp.MustCompile(`^<([^ >]+(@|:\/)[^ >]+)>`),
+		url:      regexp.MustCompile(`^(https?:\/\/[^\s<]+[^<.,:;"')\]\s])`),
+		tag:      regexp.MustCompile(`^<!--[\s\S]*?-->|^<\/?\w+(?:"[^"]*"|'[^']*'|[^'">])*?>`),
+		link:     pcre.MustCompile(link, compileFlag),
+		reflink:  pcre.MustCompile(relink, compileFlag),
+		nolink:   regexp.MustCompile(`^!?\[((?:\[[^\]]*\]|[^\[\]])*)\]`),
+		strong:   pcre.MustCompile(`^__([\s\S]+?)__(?!_)|^\*\*([\s\S]+?)\*\*(?!\*)`, compileFlag),
+		em:       pcre.MustCompile(`^\b_((?:__|[\s\S])+?)_\b|^\*((?:\*\*|[\s\S])+?)\*(?!\*)`, compileFlag),
+		code:     pcre.MustCompile("^(`+)\\s*([\\s\\S]*?[^`])\\s*\\1(?!`)", compileFlag),
+		br:       pcre.MustCompile(`^ {2,}\n(?!\s*$)`, compileFlag),
+		del:      pcre.MustCompile(`^~~(?=\S)([\s\S]*?\S)~~`, compileFlag),
+		text:     pcre.MustCompile("^[\\s\\S]+?(?=[\\\\<!\\[_*`]| {2,}\\n|$)", compileFlag),
+	}
+}
 
 //BlockRex ...
 type BlockRex struct {
@@ -36,25 +120,18 @@ type InlineRex struct {
 type Marker struct {
 	defs   map[string]Def
 	relink []Node
-	pool   chan bool
+	wg     sync.WaitGroup
 }
 
 //Mark parse the markdown file,then return MarkDown Obj
 func Mark(bytes []byte) (markdown *MarkDown) {
-	once.Do(setUp)
-	mark := &Marker{
-		defs:   make(map[string]Def),
-		relink: []Node{},
-		pool:   make(chan bool, goroutineCount),
-	}
+	mark := &Marker{defs: make(map[string]Def)}
 
 	bytes = regexp.MustCompile("\r\n|\r").ReplaceAll(bytes, []byte("\n"))
 	bytes = regexp.MustCompile("\u00a0").ReplaceAll(bytes, []byte("    "))
 	bytes = regexp.MustCompile("\u2424").ReplaceAll(bytes, []byte("\n"))
 	markdown = &MarkDown{Parts: mark.parse(bytes)}
-	for i := 0; i < goroutineCount; i++ {
-		mark.pool <- false
-	}
+	mark.wg.Wait()
 	mark.link()
 	return
 }
@@ -252,132 +329,121 @@ func (mark *Marker) parse(bytes []byte) []Node {
 	return nodes
 }
 
-//InlineParse ...
-func (mark *Marker) InlineParse(bytes []byte) (text *Text) {
-	mark.inlineSynParse(bytes, text)
-	mark.link()
-	return
-}
+func (mark *Marker) inlineParse(bytes []byte, text *Text) {
+	mark.wg.Add(1)
+	go func() {
+		parts := []Node{}
+		for len(bytes) > 0 {
+			//escape
+			if cap := inline.escape.FindSubmatch(bytes); cap != nil {
+				bytes = bytes[len(cap[0]):]
+				parts = append(parts, &InlineText{Text: html.EscapeString(string(cap[1]))})
+				continue
+			}
 
-func (mark *Marker) inlineSynParse(bytes []byte, text *Text) {
-	parts := []Node{}
-	for len(bytes) > 0 {
-		//escape
-		if cap := inline.escape.FindSubmatch(bytes); cap != nil {
-			bytes = bytes[len(cap[0]):]
-			parts = append(parts, &InlineText{Text: html.EscapeString(string(cap[1]))})
-			continue
-		}
-
-		//autolink
-		if cap := inline.autolink.FindSubmatch(bytes); cap != nil {
-			bytes = bytes[len(cap[0]):]
-			var text, href string
-			if string(cap[2]) == "@" {
-				if cap[1][6] == ':' {
-					text = string(cap[1][7:])
+			//autolink
+			if cap := inline.autolink.FindSubmatch(bytes); cap != nil {
+				bytes = bytes[len(cap[0]):]
+				var text, href string
+				if string(cap[2]) == "@" {
+					if cap[1][6] == ':' {
+						text = string(cap[1][7:])
+					} else {
+						text = string(cap[1])
+					}
+					href = "mainto:" + text
 				} else {
 					text = string(cap[1])
+					href = text
 				}
-				href = "mainto:" + text
-			} else {
-				text = string(cap[1])
-				href = text
+				parts = append(parts, &Link{Text: html.EscapeString(text), Href: html.EscapeString(href)})
+				continue
 			}
-			parts = append(parts, &Link{Text: html.EscapeString(text), Href: html.EscapeString(href)})
-			continue
-		}
 
-		//url
-		if cap := inline.url.Find(bytes); cap != nil {
-			bytes = bytes[len(cap):]
-			text := string(cap)
-			href := text
-			parts = append(parts, &Link{Text: html.EscapeString(text), Href: html.EscapeString(href)})
-			continue
-		}
-
-		//tag unsolved
-
-		//link
-		if matcher := inline.link.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			text := matcher.GroupString(1)
-			href := matcher.GroupString(2)
-			if matcher.Group(0)[0] != '!' {
-				parts = append(parts, &Link{Text: text, Href: html.EscapeString(href), Title: html.EscapeString(matcher.GroupString(3))})
-			} else {
-				parts = append(parts, &Image{Text: html.EscapeString(text), Href: html.EscapeString(href), Title: matcher.GroupString(3)})
+			//url
+			if cap := inline.url.Find(bytes); cap != nil {
+				bytes = bytes[len(cap):]
+				text := string(cap)
+				href := text
+				parts = append(parts, &Link{Text: html.EscapeString(text), Href: html.EscapeString(href)})
+				continue
 			}
-			continue
-		}
 
-		//relink nolink unsolved
-		if matcher := inline.reflink.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			text := matcher.GroupString(1)
-			href := matcher.GroupString(2)
-			var node Node
-			if matcher.Group(0)[0] != '!' {
-				node = &Link{Text: text, Href: html.EscapeString(href)}
-			} else {
-				node = &Image{Text: html.EscapeString(text), Href: html.EscapeString(href)}
+			//tag unsolved
+
+			//link
+			if matcher := inline.link.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				text := matcher.GroupString(1)
+				href := matcher.GroupString(2)
+				if matcher.Group(0)[0] != '!' {
+					parts = append(parts, &Link{Text: text, Href: html.EscapeString(href), Title: html.EscapeString(matcher.GroupString(3))})
+				} else {
+					parts = append(parts, &Image{Text: html.EscapeString(text), Href: html.EscapeString(href), Title: matcher.GroupString(3)})
+				}
+				continue
 			}
-			parts = append(parts, node)
-			mark.relink = append(mark.relink, node)
 
+			//relink nolink unsolved
+			if matcher := inline.reflink.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				text := matcher.GroupString(1)
+				href := matcher.GroupString(2)
+				var node Node
+				if matcher.Group(0)[0] != '!' {
+					node = &Link{Text: text, Href: html.EscapeString(href)}
+				} else {
+					node = &Image{Text: html.EscapeString(text), Href: html.EscapeString(href)}
+				}
+				parts = append(parts, node)
+				mark.relink = append(mark.relink, node)
+
+			}
+
+			//strong
+			if matcher := inline.strong.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				text := matcher.GroupString(1) + matcher.GroupString(2)
+				parts = append(parts, &Strong{Text: html.EscapeString(text)})
+				continue
+			}
+
+			//em
+			if matcher := inline.em.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				text := matcher.GroupString(1) + matcher.GroupString(2)
+				parts = append(parts, &Em{Text: html.EscapeString(text)})
+				continue
+			}
+
+			//code
+			if matcher := inline.code.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				parts = append(parts, &InlineCode{Text: html.EscapeString(matcher.GroupString(2))})
+				continue
+			}
+
+			//br
+			if matcher := inline.br.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				parts = append(parts, &Br{})
+				continue
+			}
+
+			//del
+			if matcher := inline.del.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				parts = append(parts, &Del{Text: html.EscapeString(matcher.GroupString(1))})
+			}
+
+			//text
+			if matcher := inline.text.Matcher(bytes, matcherFlag); matcher.Matches() {
+				bytes = bytes[len(matcher.Group(0)):]
+				parts = append(parts, &InlineText{Text: html.EscapeString(matcher.GroupString(0))})
+			}
 		}
-
-		//strong
-		if matcher := inline.strong.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			text := matcher.GroupString(1) + matcher.GroupString(2)
-			parts = append(parts, &Strong{Text: html.EscapeString(text)})
-			continue
-		}
-
-		//em
-		if matcher := inline.em.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			text := matcher.GroupString(1) + matcher.GroupString(2)
-			parts = append(parts, &Em{Text: html.EscapeString(text)})
-			continue
-		}
-
-		//code
-		if matcher := inline.code.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			parts = append(parts, &InlineCode{Text: html.EscapeString(matcher.GroupString(2))})
-			continue
-		}
-
-		//br
-		if matcher := inline.br.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			parts = append(parts, &Br{})
-			continue
-		}
-
-		//del
-		if matcher := inline.del.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			parts = append(parts, &Del{Text: html.EscapeString(matcher.GroupString(1))})
-		}
-
-		//text
-		if matcher := inline.text.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
-			parts = append(parts, &InlineText{Text: html.EscapeString(matcher.GroupString(0))})
-		}
-	}
-	text.Parts = parts
-}
-
-func (mark *Marker) inlineParse(bytes []byte, text *Text) {
-	mark.pool <- true
-	go func() {
-		mark.inlineSynParse(bytes, text)
-		<-mark.pool
+		text.Parts = parts
+		mark.wg.Done()
 	}()
 }
 
@@ -430,89 +496,4 @@ func removeEndNewline(bytes []byte) []byte {
 		}
 	}
 	return nil
-}
-
-func setUp() {
-	bullet := `(?:[*+-]|\d+\.)`
-	tag := `(?!(?:a|em|strong|small|s|cite|q|dfn|abbr|data|time|code|var|samp|kbd|sub|sup|i|b|u|mark|ruby|rt|rp|bdi|bdo|span|br|wbr|ins|del|img)\b)\w+(?!:/|[^\w\s@]*@)\b`
-	item := `^( *)(bull) ([^\n]*(\n(?!\1bull )[^\n]*)*)(?:\n+|$)`
-	item = strings.Replace(item, "bull", bullet, -1)
-
-	li := `^( *)(bull) ([^\n]*(\n(?! *bull )[^\n]*)*)(?:\n+|$)`
-	li = strings.Replace(li, "bull", bullet, -1)
-
-	hr := `^( *[-*_]){3,} *(?:\n+|$)`
-
-	heading := `^ *(#{1,6}) *([^\n]+?) *#* *(?:\n+|$)`
-
-	lheading := `^([^\n]+)\n *(=|-){2,} *(?:\n+|$)`
-
-	def := `^ *\[([^\]]+)\]: *<?([^\s>]+)>?(?: +["(]([^\n]+)[")])? *(?:\n+|$)`
-
-	blockquote := `^( *>[^\n]+(\n(?!def)[^\n]+)*\n*)+`
-	blockquote = strings.Replace(blockquote, "def", def, -1)
-
-	list := `^(( *)(bull) [\s\S]+?)(?:hr|def|\n{2,}(?! )(?!\2bull )\n*|\s*$)`
-	list = strings.Replace(list, "bull", bullet, -1)
-	list = strings.Replace(list, "hr", `\n+(?=\2?(?:[-*_] *){3,}(?:\n+|$))`, -1)
-	list = strings.Replace(list, "def", `\n+(?=`+def+`)`, -1)
-
-	html := `^ *(?:comment *(?:\n|\s*$)|closed *(?:\n{2,}|\s*$)|closing *(?:\n{2,}|\s*$))`
-	html = strings.Replace(html, "comment", `<!--[\s\S]*?-->`, -1)
-	html = strings.Replace(html, "closed", `<(tag)[\s\S]+?<\/\1>`, -1)
-	html = strings.Replace(html, "closing", `<tag(?:"[^"]*"|'[^']*'|[^'">])*?>`, -1)
-	html = strings.Replace(html, `tag`, tag, -1)
-
-	paragraph := `^((?:[^\n]+\n?(?!hr|heading|lheading|blockquote|tag|def))+)\n*`
-	paragraph = strings.Replace(paragraph, "hr", hr, -1)
-	paragraph = strings.Replace(paragraph, "heading", heading, -1)
-	paragraph = strings.Replace(paragraph, "lheading", lheading, -1)
-	paragraph = strings.Replace(paragraph, "blockquote", blockquote, -1)
-	paragraph = strings.Replace(paragraph, "tag", tag, -1)
-	paragraph = strings.Replace(def, "def", def, -1)
-
-	inside := `(?:\[[^\]]*\]|[^\[\]]|\](?=[^\[]*\]))*`
-	href := `\s*<?([\s\S]*?)>?(?:\s+['"]([\s\S]*?)['"])?\s*`
-
-	link := `^!?\[(inside)\]\(href\)`
-	link = strings.Replace(link, "inside", inside, -1)
-	link = strings.Replace(link, "href", href, -1)
-
-	relink := `^!?\[(inside)\]\s*\[([^\]]*)\]`
-	relink = strings.Replace(relink, "inside", inside, -1)
-
-	block = BlockRex{
-		newline:    regexp.MustCompile(`^\n+`),
-		code:       regexp.MustCompile(`^(( {4}| {2}|\t)[^\n]+\n*)+`),
-		fences:     pcre.MustCompile("^ *(`{3,}|~{3,}) *(\\S+)? *\\n([\\s\\S]+?)\\s*\\1 *(?:\\n+|$)", compileFlag),
-		hr:         regexp.MustCompile(hr),
-		heading:    regexp.MustCompile(heading),
-		nptable:    regexp.MustCompile(`^ *(\S.*\|.*)\n *([-:]+ *\|[-| :]*)\n((?:.*\|.*(?:\n|$))*)\n*`),
-		lheading:   regexp.MustCompile(`^([^\n]+)\n *(=|-){2,} *(?:\n+|$)`),
-		blockquote: pcre.MustCompile(blockquote, compileFlag),
-		list:       pcre.MustCompile(list, compileFlag),
-		html:       pcre.MustCompile(html, compileFlag),
-		def:        regexp.MustCompile(def),
-		table:      regexp.MustCompile(`^ *\|(.+)\n *\|( *[-:]+[-| :]*)\n((?: *\|.*(?:\n|$))*)\n`),
-		paragraph:  regexp.MustCompile(paragraph),
-		text:       regexp.MustCompile(`^[^\n]+`),
-		item:       pcre.MustCompile(item, compileFlag),
-		li:         pcre.MustCompile(li, compileFlag),
-	}
-
-	inline = InlineRex{
-		escape:   regexp.MustCompile("^\\\\([\\\\`*{}\\[\\]()#+\\-.!_>])"),
-		autolink: regexp.MustCompile(`^<([^ >]+(@|:\/)[^ >]+)>`),
-		url:      regexp.MustCompile(`^(https?:\/\/[^\s<]+[^<.,:;"')\]\s])`),
-		tag:      regexp.MustCompile(`^<!--[\s\S]*?-->|^<\/?\w+(?:"[^"]*"|'[^']*'|[^'">])*?>`),
-		link:     pcre.MustCompile(link, compileFlag),
-		reflink:  pcre.MustCompile(relink, compileFlag),
-		nolink:   regexp.MustCompile(`^!?\[((?:\[[^\]]*\]|[^\[\]])*)\]`),
-		strong:   pcre.MustCompile(`^__([\s\S]+?)__(?!_)|^\*\*([\s\S]+?)\*\*(?!\*)`, compileFlag),
-		em:       pcre.MustCompile(`^\b_((?:__|[\s\S])+?)_\b|^\*((?:\*\*|[\s\S])+?)\*(?!\*)`, compileFlag),
-		code:     pcre.MustCompile("^(`+)\\s*([\\s\\S]*?[^`])\\s*\\1(?!`)", compileFlag),
-		br:       pcre.MustCompile(`^ {2,}\n(?!\s*$)`, compileFlag),
-		del:      pcre.MustCompile(`^~~(?=\S)([\s\S]*?\S)~~`, compileFlag),
-		text:     pcre.MustCompile("^[\\s\\S]+?(?=[\\\\<!\\[_*`]| {2,}\\n|$)", compileFlag),
-	}
 }
