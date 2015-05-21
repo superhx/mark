@@ -27,10 +27,10 @@ go get github.com/superhx/markdown
 Basic usage, read a bytes ,then parse it to `Markdown` , render `Markdown` and output
 ``` golang
 //marker parse the input and return a Markdown object
-mark:=marker.Mark(input)
+mark:=mark.Mark(input)
 //writer io.Writer
 //render markdown to html and output to writer(without style sheet,see markdown_test to pretty)
-writer := marker.NewHTMLWriter(mark)
+writer := mark.NewHTMLWriter(mark)
 writer.WriteTo(output)
 ```
 The `Markdown` is like a tree (dom tree)

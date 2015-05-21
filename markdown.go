@@ -1,4 +1,4 @@
-package marker
+package mark
 
 //Node is a interface
 type Node interface {
