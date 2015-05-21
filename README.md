@@ -18,7 +18,7 @@ brew install pcre				   // In Mac OS X
 Get markdown parser
 
 ``` golang
-go get github.com/superhx/markdown
+go get github.com/superhx/mark
 ```
 ###Usage
 ---
