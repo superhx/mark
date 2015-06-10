@@ -12,7 +12,7 @@ import (
 //Flag for Markdown
 const (
 	compileFlag    = pcre.UTF8
-	matcherFlag    = pcre.PARTIAL_SOFT
+	matcherFlag    = pcre.NOTEMPTY
 	goroutineCount = 100
 )
 
