@@ -24,7 +24,7 @@ go get github.com/superhx/mark
 ---
 ####Code
 
-Basic usage, read a bytes ,then parse it to `Markdown` , render `Markdown` and output
+Basic usage, read a bytes then parse it to `Markdown` , render `Markdown` and output
 ``` golang
 //marker parse the input and return a Markdown object
 mark:=mark.Mark(input)
@@ -36,27 +36,6 @@ writer.WriteTo(output)
 The `Markdown` is like a tree (dom tree)
 
 If you want to operate the `Markdown` instead of only simple output it. It is all free for you to modify the Markdown tree as you want. The **markdown.go** contain all `struct` in Markdown tree.
-
-####Markdown transform to HTML
-
-1. Get the **mark** executable file
-``` sh
-$ cd $GOPATH/src/github.com/superhx/markdown/main
-$ go build
-```
- or get from google drive
-  - [Mac OS X](https://drive.google.com/file/d/0B3wRzs_xbfwQWUt0OEZOMjdjd1U/view?usp=sharing)
-  - [Linux](https://drive.google.com/file/d/0B3wRzs_xbfwQTjFCS0M4YTZ5SVE/view?usp=sharing)
-  - Windows
-
-2. Tranform markdown file to html file
-``` sh
-$ ./mark input_file_path output_file_path
-```
-or you can just emit the output file path
-```
-$ ./mark input_file_path
-```
 
 ###Markdown Grammar Support
 ---

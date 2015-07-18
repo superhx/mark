@@ -1,6 +1,7 @@
 package mark
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/glenn-brown/golang-pkg-pcre/src/pkg/pcre"
 	"html"
@@ -124,32 +125,32 @@ type Marker struct {
 }
 
 //Mark parse the markdown file,then return MarkDown Obj
-func Mark(bytes []byte) (markdown *MarkDown) {
+func Mark(strBytes []byte) (markdown *MarkDown) {
 	mark := &Marker{defs: make(map[string]Def)}
 
-	bytes = regexp.MustCompile("\r\n|\r").ReplaceAll(bytes, []byte("\n"))
-	bytes = regexp.MustCompile("\u00a0").ReplaceAll(bytes, []byte("    "))
-	bytes = regexp.MustCompile("\u2424").ReplaceAll(bytes, []byte("\n"))
-	markdown = &MarkDown{Parts: mark.parse(bytes)}
+	strBytes = regexp.MustCompile("\r\n|\r").ReplaceAll(strBytes, []byte("\n"))
+	strBytes = regexp.MustCompile("\u00a0").ReplaceAll(strBytes, []byte("    "))
+	strBytes = regexp.MustCompile("\u2424").ReplaceAll(strBytes, []byte("\n"))
+	markdown = &MarkDown{Parts: mark.parse(strBytes)}
 	mark.wg.Wait()
 	mark.link()
 	return
 }
 
-func (mark *Marker) parse(bytes []byte) []Node {
+func (mark *Marker) parse(strBytes []byte) []Node {
 	nodes := []Node{}
-	for len(bytes) > 0 {
+	for len(strBytes) > 0 {
 		//newline
-		if node := block.newline.Find(bytes); node != nil {
-			bytes = bytes[len(node):]
+		if node := block.newline.Find(strBytes); node != nil {
+			strBytes = strBytes[len(node):]
 			if len(node) > 1 {
 				nodes = append(nodes, &Space{})
 			}
 		}
 
 		//code
-		if node := block.code.Find(bytes); node != nil {
-			bytes = bytes[len(node):]
+		if node := block.code.Find(strBytes); node != nil {
+			strBytes = strBytes[len(node):]
 			node = regexp.MustCompile(`^ {4}`).ReplaceAll(node, []byte(""))
 			node := removeEndNewline(node)
 			nodes = append(nodes, &Code{Text: html.EscapeString(string(node))})
@@ -157,15 +158,15 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		}
 
 		//fences
-		if matcher := block.fences.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
+		if matcher := block.fences.Matcher(strBytes, matcherFlag); matcher.Matches() {
+			strBytes = strBytes[len(matcher.Group(0)):]
 			nodes = append(nodes, &Code{Lang: html.EscapeString(matcher.GroupString(2)), Text: html.EscapeString(matcher.GroupString(3))})
 			continue
 		}
 
 		//heading
-		if node := block.heading.FindSubmatch(bytes); node != nil {
-			bytes = bytes[len(node[0]):]
+		if node := block.heading.FindSubmatch(strBytes); node != nil {
+			strBytes = strBytes[len(node[0]):]
 			text := &Text{}
 			mark.inlineParse(node[2], text)
 			nodes = append(nodes, &Heading{Depth: len(node[1]), Text: text})
@@ -173,8 +174,8 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		}
 
 		//nptable is table no leading pipe
-		if node := block.nptable.FindSubmatch(bytes); node != nil {
-			bytes = bytes[len(node[0]):]
+		if node := block.nptable.FindSubmatch(strBytes); node != nil {
+			strBytes = strBytes[len(node[0]):]
 			header := regexp.MustCompile(` *\| *`).Split(string(regexp.MustCompile(`^ *| *\| *$`).ReplaceAll(node[1], []byte(""))), -1)
 			table := Nptable{
 				Header: header,
@@ -211,8 +212,8 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		}
 
 		//lheading
-		if node := block.lheading.FindSubmatch(bytes); node != nil {
-			bytes = bytes[len(node[0]):]
+		if node := block.lheading.FindSubmatch(strBytes); node != nil {
+			strBytes = strBytes[len(node[0]):]
 			depth := 2
 			if string(node[2]) == "=" {
 				depth = 1
@@ -227,24 +228,24 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		}
 
 		//hr
-		if node := block.hr.Find(bytes); node != nil {
-			bytes = bytes[len(node):]
+		if node := block.hr.Find(strBytes); node != nil {
+			strBytes = strBytes[len(node):]
 			nodes = append(nodes, &Hr{})
 			continue
 		}
 
 		//blockquote
-		if matcher := block.blockquote.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
+		if matcher := block.blockquote.Matcher(strBytes, matcherFlag); matcher.Matches() {
+			strBytes = strBytes[len(matcher.Group(0)):]
 			children := mark.parse(regexp.MustCompile(`^ *> ?`).ReplaceAll(matcher.Group(0), []byte("")))
 			nodes = append(nodes, &Blockquote{Parts: children})
 			continue
 		}
 
 		// list
-		if matcher := block.list.Matcher(bytes, matcherFlag); matcher.Matches() {
+		if matcher := block.list.Matcher(strBytes, matcherFlag); matcher.Matches() {
 			listBytes := append(matcher.Group(1), '\n')
-			bytes = bytes[len(matcher.Group(0)):]
+			strBytes = strBytes[len(matcher.Group(0)):]
 			ordered := false
 			bull := matcher.GroupString(3)
 			if !(bull == "*" || bull == "+" || bull == "-") {
@@ -260,22 +261,22 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		}
 
 		//html
-		if matcher := block.html.Matcher(bytes, matcherFlag); matcher.Matches() {
-			bytes = bytes[len(matcher.Group(0)):]
+		if matcher := block.html.Matcher(strBytes, matcherFlag); matcher.Matches() {
+			strBytes = strBytes[len(matcher.Group(0)):]
 			nodes = append(nodes, &HTML{Text: matcher.GroupString(0)})
 			continue
 		}
 
 		//def
-		if node := block.def.FindSubmatch(bytes); node != nil {
-			bytes = bytes[len(node[0]):]
+		if node := block.def.FindSubmatch(strBytes); node != nil {
+			strBytes = strBytes[len(node[0]):]
 			mark.defs[string(node[1])] = Def{Href: html.EscapeString(string(node[2])), Title: html.EscapeString(string(node[3]))}
 			continue
 		}
 
 		//table
-		if node := block.table.FindSubmatch(bytes); node != nil {
-			bytes = bytes[len(node[0]):]
+		if node := block.table.FindSubmatch(strBytes); node != nil {
+			strBytes = strBytes[len(node[0]):]
 			table := Nptable{
 				Header: regexp.MustCompile(` *\| *`).Split(string(regexp.MustCompile(`^ *| *\| *$`).ReplaceAll(node[1], []byte(""))), -1),
 			}
@@ -312,16 +313,16 @@ func (mark *Marker) parse(bytes []byte) []Node {
 		}
 
 		//text
-		if node := block.text.Find(bytes); node != nil {
-			bytes = bytes[len(node):]
+		if node := block.text.Find(strBytes); node != nil {
+			strBytes = strBytes[len(node):]
 			text := &Text{}
 			mark.inlineParse(node, text)
 			nodes = append(nodes, &BlockText{Text: text})
 			continue
 		}
 
-		if len(bytes) > 0 {
-			fmt.Println("Infinite loop on byte:\n" + string(bytes))
+		if len(strBytes) > 0 {
+			fmt.Println("Infinite loop on byte:\n" + string(strBytes))
 			break
 		}
 	}
@@ -329,21 +330,22 @@ func (mark *Marker) parse(bytes []byte) []Node {
 	return nodes
 }
 
-func (mark *Marker) inlineParse(bytes []byte, text *Text) {
+func (mark *Marker) inlineParse(strBytes []byte, text *Text) {
 	mark.wg.Add(1)
 	go func() {
+		strBytes = bytes.TrimSpace(strBytes)
 		parts := []Node{}
-		for len(bytes) > 0 {
+		for len(strBytes) > 0 {
 			//escape
-			if cap := inline.escape.FindSubmatch(bytes); cap != nil {
-				bytes = bytes[len(cap[0]):]
+			if cap := inline.escape.FindSubmatch(strBytes); cap != nil {
+				strBytes = strBytes[len(cap[0]):]
 				parts = append(parts, &InlineText{Text: html.EscapeString(string(cap[1]))})
 				continue
 			}
 
 			//autolink
-			if cap := inline.autolink.FindSubmatch(bytes); cap != nil {
-				bytes = bytes[len(cap[0]):]
+			if cap := inline.autolink.FindSubmatch(strBytes); cap != nil {
+				strBytes = strBytes[len(cap[0]):]
 				var text, href string
 				if string(cap[2]) == "@" {
 					if cap[1][6] == ':' {
@@ -361,8 +363,8 @@ func (mark *Marker) inlineParse(bytes []byte, text *Text) {
 			}
 
 			//url
-			if cap := inline.url.Find(bytes); cap != nil {
-				bytes = bytes[len(cap):]
+			if cap := inline.url.Find(strBytes); cap != nil {
+				strBytes = strBytes[len(cap):]
 				text := string(cap)
 				href := text
 				parts = append(parts, &Link{Text: html.EscapeString(text), Href: html.EscapeString(href)})
@@ -372,8 +374,8 @@ func (mark *Marker) inlineParse(bytes []byte, text *Text) {
 			//tag unsolved
 
 			//link
-			if matcher := inline.link.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
+			if matcher := inline.link.Matcher(strBytes, matcherFlag); matcher.Matches() {
+				strBytes = strBytes[len(matcher.Group(0)):]
 				text := matcher.GroupString(1)
 				href := matcher.GroupString(2)
 				if matcher.Group(0)[0] != '!' {
@@ -385,8 +387,8 @@ func (mark *Marker) inlineParse(bytes []byte, text *Text) {
 			}
 
 			//relink nolink unsolved
-			if matcher := inline.reflink.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
+			if matcher := inline.reflink.Matcher(strBytes, matcherFlag); matcher.Matches() {
+				strBytes = strBytes[len(matcher.Group(0)):]
 				text := matcher.GroupString(1)
 				href := matcher.GroupString(2)
 				var node Node
@@ -401,44 +403,44 @@ func (mark *Marker) inlineParse(bytes []byte, text *Text) {
 			}
 
 			//strong
-			if matcher := inline.strong.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
+			if matcher := inline.strong.Matcher(strBytes, matcherFlag); matcher.Matches() {
+				strBytes = strBytes[len(matcher.Group(0)):]
 				text := matcher.GroupString(1) + matcher.GroupString(2)
 				parts = append(parts, &Strong{Text: html.EscapeString(text)})
 				continue
 			}
 
 			//em
-			if matcher := inline.em.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
+			if matcher := inline.em.Matcher(strBytes, matcherFlag); matcher.Matches() {
+				strBytes = strBytes[len(matcher.Group(0)):]
 				text := matcher.GroupString(1) + matcher.GroupString(2)
 				parts = append(parts, &Em{Text: html.EscapeString(text)})
 				continue
 			}
 
 			//code
-			if matcher := inline.code.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
+			if matcher := inline.code.Matcher(strBytes, matcherFlag); matcher.Matches() {
+				strBytes = strBytes[len(matcher.Group(0)):]
 				parts = append(parts, &InlineCode{Text: html.EscapeString(matcher.GroupString(2))})
 				continue
 			}
 
 			//br
-			if matcher := inline.br.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
+			if matcher := inline.br.Matcher(strBytes, matcherFlag); matcher.Matches() {
+				strBytes = strBytes[len(matcher.Group(0)):]
 				parts = append(parts, &Br{})
 				continue
 			}
 
 			//del
-			if matcher := inline.del.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
+			if matcher := inline.del.Matcher(strBytes, matcherFlag); matcher.Matches() {
+				strBytes = strBytes[len(matcher.Group(0)):]
 				parts = append(parts, &Del{Text: html.EscapeString(matcher.GroupString(1))})
 			}
 
 			//text
-			if matcher := inline.text.Matcher(bytes, matcherFlag); matcher.Matches() {
-				bytes = bytes[len(matcher.Group(0)):]
+			if matcher := inline.text.Matcher(strBytes, matcherFlag); matcher.Matches() {
+				strBytes = strBytes[len(matcher.Group(0)):]
 				parts = append(parts, &InlineText{Text: html.EscapeString(matcher.GroupString(0))})
 			}
 		}
@@ -451,21 +453,21 @@ func (mark *Marker) inlineStringParse(str string, text *Text) {
 	mark.inlineParse([]byte(str), text)
 }
 
-func (mark *Marker) subList(bytes []byte) *Item {
-	matcher := block.li.Matcher(bytes, matcherFlag)
+func (mark *Marker) subList(strBytes []byte) *Item {
+	matcher := block.li.Matcher(strBytes, matcherFlag)
 	node := matcher.Group(0)
-	bytes = bytes[len(node):]
-	if len(node) == len(bytes) {
-		return &Item{Parts: mark.parse(matcher.Group(3))}
+	if len(node) == len(strBytes) {
+		return &Item{Parts: mark.parse(bytes.TrimSpace(matcher.Group(3)))}
 	}
+	strBytes = strBytes[len(node):]
 	item := &Item{&List{Items: []*Item{}}, mark.parse([]byte(matcher.GroupString(3) + "\n"))}
-	matcher = block.item.Matcher(bytes, matcherFlag)
+	matcher = block.item.Matcher(strBytes, matcherFlag)
 	bull := matcher.GroupString(2)
 	if !(bull == "*" || bull == "+" || bull == "-") {
 		item.Ordered = true
 	}
-	for ; len(bytes) > 0 && matcher.Matches(); matcher.Match(bytes, matcherFlag) {
-		bytes = bytes[len(matcher.Group(0)):]
+	for ; len(strBytes) > 0 && matcher.Matches(); matcher.Match(strBytes, matcherFlag) {
+		strBytes = strBytes[len(matcher.Group(0)):]
 		item.Items = append(item.Items, mark.subList(matcher.Group(0)))
 	}
 	return item
@@ -488,11 +490,11 @@ func (mark *Marker) link() {
 	}
 }
 
-func removeEndNewline(bytes []byte) []byte {
-	for i := len(bytes) - 1; i >= 0; i-- {
-		if bytes[i] != '\n' {
-			bytes = bytes[:i]
-			return bytes
+func removeEndNewline(strBytes []byte) []byte {
+	for i := len(strBytes) - 1; i >= 0; i-- {
+		if strBytes[i] != '\n' {
+			strBytes = strBytes[:i]
+			return strBytes
 		}
 	}
 	return nil
