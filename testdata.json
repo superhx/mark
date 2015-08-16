@@ -1,0 +1,52 @@
+[{
+  "input": "\n\n",
+  "oracle": ""
+}, {
+  "input": "`inline code`",
+  "oracle": "<p><pre><code>inline code</code></pre></p>"
+}, {
+  "input": "#heading1",
+  "oracle": "<h1>heading1</h1>"
+}, {
+  "input": "heading1\n===",
+  "oracle": "<h1>heading1</h1>"
+}, {
+  "input": "heading2\n---",
+  "oracle": "<h2>heading2</h2>"
+}, {
+  "input": "first header|second header\n---|---\ncontent cell|content cell\n---|---\ncontent cell",
+  "oracle": "<table><thead><tr><th>first header</th><th>second header</th></tr></thead><tbody></tbody></table>"
+}, {
+  "input": "- this is a list that only have one li",
+  "oracle": "<ul><li><p>this is a list that only have one li</p></li></ul>"
+}, {
+  "input": "- this is a list that only have one li with blank append   ",
+  "oracle": "<ul><li><p>this is a list that only have one li with blank append</p></li></ul>"
+}, {
+  "input": "-    this is a list that only have one li with blank prepend",
+  "oracle": "<ul><li><p>this is a list that only have one li with blank prepend</p></li></ul>"
+}, {
+  "input": "- parent\n  - child\n  - child",
+  "oracle": "<ul><li><p>parent</p><ul><li><p>child</p></li><li><p>child</p></li></ul></li></ul>"
+}, {
+  "input": "",
+  "oracle": ""
+}, {
+  "input": "",
+  "oracle": ""
+}, {
+  "input": "",
+  "oracle": ""
+}, {
+  "input": "",
+  "oracle": ""
+}, {
+  "input": "",
+  "oracle": ""
+}, {
+  "input": "",
+  "oracle": ""
+}, {
+  "input": "",
+  "oracle": ""
+} ]

@@ -190,7 +190,7 @@ func (mark *Marker) parse(strBytes []byte) []Node {
 				} else if matched, _ = regexp.MatchString(`^ *:-+ *$`, align[i]); matched {
 					align[i] = "left"
 				} else {
-					align[i] = ""
+					align[i] = "left"
 				}
 			}
 			table.Align = align
@@ -290,7 +290,7 @@ func (mark *Marker) parse(strBytes []byte) []Node {
 				} else if matched, _ = regexp.MatchString(`^ *:-+ *$`, align[i]); matched {
 					align[i] = "left"
 				} else {
-					align[i] = ""
+					align[i] = "left"
 				}
 			}
 			table.Align = align
