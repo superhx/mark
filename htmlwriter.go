@@ -24,7 +24,7 @@ func (html HTMLWriter) writeTo(node Node, w io.Writer) {
 
 	case *MarkDown:
 		markdown := node.(*MarkDown)
-		w.Write([]byte("<article class=\"markdown-body\">"))
+		w.Write([]byte("<article>"))
 		for _, part := range markdown.Parts {
 			html.writeTo(part, w)
 		}
